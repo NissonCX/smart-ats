@@ -9,7 +9,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
+        <version>3.1.6</version>
         <relativePath/>
     </parent>
 
@@ -27,10 +27,10 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- 第三方库版本（统一管理，避免冲突）-->
-        <mybatis-plus.version>3.5.5</mybatis-plus.version>
-        <redisson.version>3.25.0</redisson.version>
+        <mybatis-plus.version>3.5.9</mybatis-plus.version>
         <fastjson2.version>2.0.43</fastjson2.version>
         <hutool.version>5.8.23</hutool.version>
+        <jwt.version>0.11.5</jwt.version>
     </properties>
 
     <!-- ==================== 依赖管理 ==================== -->
@@ -54,11 +54,23 @@
             <version>${mybatis-plus.version}</version>
         </dependency>
 
-        <!-- 4️⃣ MySQL 驱动 (连接 MySQL 数据库) -->
+        <!-- 4️⃣ Spring JDBC (提供 JdbcTemplate) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <!-- 5️⃣ MySQL 驱动 (连接 MySQL 数据库) -->
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- 5️⃣ Spring Security (密码加密 BCrypt) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
         <!-- 5️⃣ Redis (缓存、限流、分布式锁) -->
@@ -67,39 +79,50 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
-        <!-- 6️⃣ Redisson (分布式锁客户端) -->
-        <!-- 暂时注释，等实现分布式锁功能时再启用 -->
-        <!--<dependency>
-            <groupId>org.redisson</groupId>
-            <artifactId>redisson-spring-boot-starter</artifactId>
-            <version>${redisson.version}</version>
-        </dependency>-->
-
-        <!-- 7️⃣ RabbitMQ (消息队列) -->
+        <!-- 6️⃣ RabbitMQ (消息队列) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
-        <!-- 8️⃣ Lombok (简化 Java 代码 - @Data, @Slf4j) -->
+        <!-- 7️⃣ Lombok (简化 Java 代码 - @Data, @Slf4j) -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
 
-        <!-- 9️⃣ Fastjson2 (JSON 序列化) -->
+        <!-- 8️⃣ Fastjson2 (JSON 序列化) -->
         <dependency>
             <groupId>com.alibaba.fastjson2</groupId>
             <artifactId>fastjson2</artifactId>
             <version>${fastjson2.version}</version>
         </dependency>
 
-        <!-- 🔟 Hutool (Java 工具类库 - 加密、时间、字符串等) -->
+        <!-- 9️⃣ Hutool (Java 工具类库 - 加密、时间、字符串等) -->
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
+        </dependency>
+
+        <!-- 🔟 JWT (JSON Web Token 处理) -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jwt.version}</version>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- 1️⃣1️⃣ Spring Boot Test (测试框架) -->

@@ -98,3 +98,4 @@ smartats:
   ai:
     daily-quota: 100              # 每日 AI 调用配额
     model: gpt-3.5-turbo         # 默认 AI 模型
+
