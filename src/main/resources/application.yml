@@ -12,13 +12,28 @@ server:
     context-path: /api/v1         # 全局路径前缀（所有接口以 /api/v1 开头）
 
 spring:
+  mail:
+    host: smtp.qq.com
+    port: 587
+    username: 2144546224@qq.com
+    password: tpjdvfieotyfebdh
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        ssl:
+          trust: smtp.qq.com
+    default-encoding: UTF-8
   application:
     name: smartats              # 应用名称（会在日志、监控中显示）
 
   # ==================== 数据库配置 ====================
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver    # MySQL 驱动类
-    url: jdbc:mysql://localhost:3307/smartats?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8mb4
+    url: jdbc:mysql://localhost:3307/smartats?useSSL=false&serverTimezone=Asia/Shanghai
     username: smartats                                    # 数据库用户名
     password: smartats123                                 # 数据库密码
 
@@ -97,5 +112,9 @@ smartats:
 
   ai:
     daily-quota: 100              # 每日 AI 调用配额
+
+  verification-code:
+    expire-time: 300              # 验证码过期时间（5分钟 = 300秒）
+
     model: gpt-3.5-turbo         # 默认 AI 模型
 

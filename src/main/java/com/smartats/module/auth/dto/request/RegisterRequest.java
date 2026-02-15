@@ -26,5 +26,12 @@ public class RegisterRequest {
 
     @Pattern(regexp = "^(ADMIN|HR|INTERVIEWER)$", message = "角色只能是 ADMIN/HR/INTERVIEWER")
     private String role;  // 可选，默认 HR
+
+    /**
+     * 邮箱验证码
+     */
+    @NotBlank(message = "验证码不能为空")
+    @Pattern(regexp = "^\\d{6}$", message = "验证码必须是 6 位数字")
+    private String verificationCode;
 }
 

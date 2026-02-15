@@ -23,6 +23,7 @@ public class UserService {
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final UserMapper userMapper;
+    private final VerificationCodeService verificationCodeService;
 
     /**
      * 用户注册
@@ -30,7 +31,16 @@ public class UserService {
     @Transactional(rollbackFor = Exception.class)
     public void register(RegisterRequest request) {
         log.info("用户注册请求：username={}, email={}", request.getUsername(), request.getEmail());
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 第 0 步：验证邮箱验证码（新增）
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        boolean codeValid = verificationCodeService.verifyCode(request.getEmail(), request.getVerificationCode());
+
+        if (!codeValid) {
+            log.warn("注册失败：验证码错误 - email={}", request.getEmail());
+            throw new BusinessException(ResultCode.VERIFICATION_CODE_INVALID);
+        }
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // 第 1 步：校验用户名是否已存在
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -126,21 +136,11 @@ public class UserService {
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // 第 6 步：构造响应对象
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getRole(),
-                user.getDailyAiQuota(),
-                0  // 今日已使用 AI 次数（后续从 Redis 读取）
+        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(user.getId(), user.getUsername(), user.getEmail(), user.getRole(), user.getDailyAiQuota(), 0  // 今日已使用 AI 次数（后续从 Redis 读取）
         );
 
-        LoginResponse response = new LoginResponse(
-                accessToken,
-                refreshToken,
-                7200L,  // expiresIn（秒）
-                userInfo
-        );
+        LoginResponse response = new LoginResponse(accessToken, refreshToken, 7200L,  // expiresIn（秒）
+                userInfo);
 
         log.info("登录成功：userId={}, username={}", user.getId(), user.getUsername());
 

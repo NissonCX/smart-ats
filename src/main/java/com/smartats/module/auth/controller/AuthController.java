@@ -3,8 +3,10 @@ package com.smartats.module.auth.controller;
 import com.smartats.common.result.Result;
 import com.smartats.module.auth.dto.request.LoginRequest;
 import com.smartats.module.auth.dto.request.RegisterRequest;
+import com.smartats.module.auth.dto.request.SendVerificationCodeRequest;
 import com.smartats.module.auth.dto.response.LoginResponse;
 import com.smartats.module.auth.service.UserService;
+import com.smartats.module.auth.service.VerificationCodeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final UserService userService;
-
+    private final VerificationCodeService verificationCodeService;
     /**
      * 用户注册
      * POST /api/v1/auth/register
@@ -37,5 +39,16 @@ public class AuthController {
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = userService.login(request);
         return Result.success(response);
+    }
+
+    /**
+     * 发送验证码
+     * <p>
+     * POST /api/v1/auth/send-verification-code
+     */
+    @PostMapping("/send-verification-code")
+    public Result<Void> sendVerificationCode(@Valid @RequestBody SendVerificationCodeRequest request) {
+        verificationCodeService.sendVerificationCode(request.getEmail());
+        return Result.success();
     }
 }
