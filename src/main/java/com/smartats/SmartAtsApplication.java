@@ -3,6 +3,7 @@ package com.smartats;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * SmartATS 应用启动类
@@ -19,6 +20,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *    3. 分离配置和业务代码
  */
 @SpringBootApplication
+@EnableScheduling
 @MapperScan("com.smartats.module.*.mapper")
 public class SmartAtsApplication {
 

@@ -111,6 +111,17 @@ public class RedisKeyConstants {
      */
     public static final String CACHE_JOB_HOT_KEY = "cache:job:hot";
 
+    /**
+     * 职位浏览量计数器 Key 前缀
+     * <p>
+     * 完整格式：counter:job:view:{jobId}
+     * <p>
+     * Value：浏览量计数（纯数字）
+     * <p>
+     * TTL：永不过期（由定时任务同步到数据库后手动删除）
+     */
+    public static final String COUNTER_JOB_VIEW_PREFIX = "counter:job:view:";
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 角色前缀
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
