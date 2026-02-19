@@ -10,13 +10,17 @@ server:
   port: 8080                    # 应用端口（浏览器访问 http://localhost:8080）
   servlet:
     context-path: /api/v1         # 全局路径前缀（所有接口以 /api/v1 开头）
-
+    multipart:
+      enabled: true
+      max-file-size: 10MB       # 单个文件最大 10MB
+      max-request-size: 50MB    # 请求最大 50MB
+      file-size-threshold: 2MB  # 超过 2MB 才写入磁盘
 spring:
   mail:
     host: smtp.qq.com
     port: 587
     username: 2144546224@qq.com
-    password: tpjdvfieotyfebdh
+    password: ${MAIL_PASSWORD}   # 从环境变量读取，本地开发在 .env 或 IDE 中配置
     properties:
       mail:
         smtp:
@@ -118,3 +122,11 @@ smartats:
 
     model: gpt-3.5-turbo         # 默认 AI 模型
 
+minio:
+  endpoint: http://localhost:9000
+  access-key: admin
+  secret-key: admin123456
+  bucket-name: smartats-resumes
+  connect-timeout: 10000  # 10秒
+  write-timeout: 60000     # 60秒
+  read-timeout: 10000      # 10秒

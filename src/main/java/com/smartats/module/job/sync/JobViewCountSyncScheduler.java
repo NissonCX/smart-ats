@@ -43,7 +43,7 @@ public class JobViewCountSyncScheduler {
      * 2. 批量更新对应的 jobs 表记录
      * 3. 删除已同步的 Redis 计数器
      */
-    @Scheduled(fixedRate = 60000)  // 60 秒执行一次
+    @Scheduled(fixedRate = 600000)  // 60 秒执行一次
     public void syncViewCountToDatabase() {
         long startTime = System.currentTimeMillis();
         log.info("开始同步职位浏览量：Redis → MySQL");

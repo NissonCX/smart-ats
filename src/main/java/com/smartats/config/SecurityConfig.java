@@ -26,10 +26,19 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // 认证接口：允许匿名访问
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/send-verification-code").permitAll()
+
+                        // 职位接口：允许匿名访问
                         .requestMatchers(HttpMethod.GET, "/jobs/**").permitAll()
+
+                        // 简历上传接口：需要认证（需要 JWT Token）
+                        // 注意：这里不需要显式配置，因为 anyRequest().authenticated() 已经覆盖
+                        // 但为了清晰，我们可以显式声明
+
+                        // 其他所有接口：需要认证
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
