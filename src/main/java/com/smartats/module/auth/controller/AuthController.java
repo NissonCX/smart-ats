@@ -9,6 +9,7 @@ import com.smartats.module.auth.service.UserService;
 import com.smartats.module.auth.service.VerificationCodeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -51,4 +52,31 @@ public class AuthController {
         verificationCodeService.sendVerificationCode(request.getEmail());
         return Result.success();
     }
+
+    /**
+     * 测试 JWT 认证接口
+     * <p>
+     * GET /api/v1/auth/test
+     * <p>
+     * 需要携带有效的 JWT Token 才能访问
+     * <p>
+     * 用于验证 JWT 认证过滤器是否正常工作
+     */
+    @GetMapping("/test")
+    public Result<Object> testAuthentication(Authentication authentication) {
+        return Result.success(new TestAuthResponse(
+                (Long) authentication.getPrincipal(),
+                authentication.getAuthorities(),
+                "JWT 认证成功！"
+        ));
+    }
+
+    /**
+     * 测试认证响应对象
+     */
+    private record TestAuthResponse(
+            Long userId,
+            Object authorities,
+            String message
+    ) {}
 }

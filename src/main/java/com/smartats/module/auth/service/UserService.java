@@ -1,6 +1,7 @@
 package com.smartats.module.auth.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.smartats.common.constants.RedisKeyConstants;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
 import com.smartats.module.auth.dto.request.LoginRequest;
@@ -11,9 +12,12 @@ import com.smartats.module.auth.mapper.UserMapper;
 import com.smartats.module.auth.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +28,7 @@ public class UserService {
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final UserMapper userMapper;
     private final VerificationCodeService verificationCodeService;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 用户注册
@@ -144,6 +149,30 @@ public class UserService {
 
         log.info("登录成功：userId={}, username={}", user.getId(), user.getUsername());
 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 第 6 步：存储 Token 到 Redis（支持 Token 撤销）
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        // 存储 accessToken 到 Redis（Key: jwt:token:{userId}）
+        String accessTokenKey = RedisKeyConstants.JWT_TOKEN_KEY_PREFIX + user.getId();
+        redisTemplate.opsForValue().set(
+                accessTokenKey,
+                accessToken,
+                jwtUtil.getExpiration(),
+                TimeUnit.SECONDS
+        );
+
+        // 存储 refreshToken 到 Redis（Key: jwt:refresh:{userId}）
+        String refreshTokenKey = RedisKeyConstants.JWT_REFRESH_TOKEN_KEY_PREFIX + user.getId();
+        redisTemplate.opsForValue().set(
+                refreshTokenKey,
+                refreshToken,
+                jwtUtil.getRefreshExpiration(),
+                TimeUnit.SECONDS
+        );
+
+        log.info("Token 已存储到 Redis: userId={}, accessTokenExpire={}s, refreshTokenExpire={}s",
+                user.getId(), jwtUtil.getExpiration(), jwtUtil.getRefreshExpiration());
         return response;
     }
 }
