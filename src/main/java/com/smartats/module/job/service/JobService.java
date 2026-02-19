@@ -190,6 +190,8 @@ public class JobService {
 
     /**
      * 获取职位详情（使用 Redis 原子计数器优化浏览量统计）
+     * <p>
+     * 浏览量计算公式：用户看到的浏览量 = 数据库累积值 + Redis增量计数器
      */
     public JobResponse getJobDetail(Long id) {
         log.info("查询职位详情：id={}", id);
@@ -198,70 +200,46 @@ public class JobService {
         String counterKey = RedisKeyConstants.COUNTER_JOB_VIEW_PREFIX + id;
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 第 1 步：原子自增 Redis 计数器
+        // 第 1 步：从数据库读取职位数据（必须先读，获取基础浏览量）
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        Long currentViewCount = redisTemplate.opsForValue().increment(counterKey);
-        log.debug("Redis 计数器自增：key={}, count={}", counterKey, currentViewCount);
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 第 2 步：检查缓存
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-        String cachedData = redisTemplate.opsForValue().get(cacheKey);
-
-        JobResponse response;
-
-        if (cachedData != null) {
-            // 缓存命中：反序列化并更新浏览量
-            try {
-                response = objectMapper.readValue(cachedData, JobResponse.class);
-                response.setViewCount(currentViewCount.intValue());
-
-                // 更新缓存中的浏览量
-                redisTemplate.opsForValue().set(cacheKey,
-                    objectMapper.writeValueAsString(response), 30, TimeUnit.MINUTES);
-            } catch (JsonProcessingException e) {
-                log.error("缓存数据反序列化失败", e);
-                response = getJobFromDatabase(id, currentViewCount.intValue());
-            }
-        } else {
-            // 缓存未命中：从数据库读取（包含数据库中已有的浏览量）
-            Job job = jobMapper.selectById(id);
-            if (job == null) {
-                log.warn("职位不存在：id={}", id);
-                throw new BusinessException(ResultCode.NOT_FOUND, "职位不存在");
-            }
-
-            // 转换为响应对象
-            response = convertToResponse(job);
-
-            // 浏览量 = 数据库中的基础值 + Redis 计数器增量
-            long baseViewCount = job.getViewCount() != null ? job.getViewCount() : 0;
-            response.setViewCount((int) (baseViewCount + (currentViewCount - 1)));  // -1 因为刚才已经自增了一次
-
-            // 写入缓存
-            try {
-                redisTemplate.opsForValue().set(cacheKey,
-                    objectMapper.writeValueAsString(response), 30, TimeUnit.MINUTES);
-            } catch (JsonProcessingException e) {
-                log.error("缓存数据序列化失败", e);
-            }
-        }
-
-        return response;
-    }
-
-    /**
-     * 从数据库获取职位数据（辅助方法）
-     */
-    private JobResponse getJobFromDatabase(Long id, int currentViewCount) {
         Job job = jobMapper.selectById(id);
         if (job == null) {
+            log.warn("职位不存在：id={}", id);
             throw new BusinessException(ResultCode.NOT_FOUND, "职位不存在");
         }
+
+        // 数据库中存储的是历史累积浏览量
+        int baseViewCount = job.getViewCount() != null ? job.getViewCount() : 0;
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 第 2 步：原子自增 Redis 增量计数器
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        Long redisIncrement = redisTemplate.opsForValue().increment(counterKey);
+        log.debug("Redis 计数器自增：key={}, increment={}, baseViewCount={}",
+            counterKey, redisIncrement, baseViewCount);
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 第 3 步：计算总浏览量并返回
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
         JobResponse response = convertToResponse(job);
-        response.setViewCount(currentViewCount);
+
+        // 总浏览量 = 数据库累积值 + Redis增量计数器
+        response.setViewCount(baseViewCount + redisIncrement.intValue());
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 第 4 步：更新缓存（缓存的是总浏览量，不是单独的Redis计数器）
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        try {
+            redisTemplate.opsForValue().set(cacheKey,
+                objectMapper.writeValueAsString(response), 30, TimeUnit.MINUTES);
+        } catch (JsonProcessingException e) {
+            log.error("缓存数据序列化失败", e);
+        }
+
         return response;
     }
 
