@@ -3,6 +3,8 @@ package com.smartats.module.candidate.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.smartats.common.result.Result;
+import com.smartats.common.util.DataMaskUtil;
+import com.smartats.module.candidate.dto.CandidateQueryRequest;
 import com.smartats.module.candidate.dto.CandidateResponse;
 import com.smartats.module.candidate.dto.CandidateUpdateRequest;
 import com.smartats.module.candidate.entity.Candidate;
@@ -35,7 +37,7 @@ public class CandidateController {
             return Result.error(404, "候选人不存在");
         }
 
-        CandidateResponse response = convertToResponse(candidate);
+        CandidateResponse response = toResponse(candidate);
         return Result.success(response);
     }
 
@@ -51,7 +53,7 @@ public class CandidateController {
             return Result.error(404, "候选人不存在");
         }
 
-        CandidateResponse response = convertToResponse(candidate);
+        CandidateResponse response = toResponse(candidate);
         return Result.success(response);
     }
 
@@ -116,7 +118,7 @@ public class CandidateController {
         // 保存更新
         Candidate updated = candidateService.saveManual(candidate);
 
-        CandidateResponse response = convertToResponse(updated);
+        CandidateResponse response = toResponse(updated);
         return Result.success(response);
     }
 
@@ -135,26 +137,47 @@ public class CandidateController {
     }
 
     /**
-     * 分页查询候选人列表
+     * 分页查询候选人列表，支持多维度筛选
      */
     @GetMapping
     public Result<IPage<CandidateResponse>> listCandidates(
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) String keyword) {
-        log.info("查询候选人列表: page={}, pageSize={}, keyword={}", page, pageSize, keyword);
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String education,
+            @RequestParam(required = false) String skill,
+            @RequestParam(required = false) Integer minWorkYears,
+            @RequestParam(required = false) Integer maxWorkYears,
+            @RequestParam(required = false) String currentPosition) {
+        log.info("查询候选人列表: page={}, pageSize={}, keyword={}, education={}, skill={}",
+                page, pageSize, keyword, education, skill);
 
-        Page<Candidate> result = candidateService.listCandidates(keyword, page, pageSize);
+        CandidateQueryRequest request = new CandidateQueryRequest();
+        request.setPage(page);
+        request.setPageSize(pageSize);
+        request.setKeyword(keyword);
+        request.setEducation(education);
+        request.setSkill(skill);
+        request.setMinWorkYears(minWorkYears);
+        request.setMaxWorkYears(maxWorkYears);
+        request.setCurrentPosition(currentPosition);
+
+        Page<Candidate> result = candidateService.listCandidates(request);
 
         Page<CandidateResponse> responsePage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
-        responsePage.setRecords(result.getRecords().stream().map(this::convertToResponse).toList());
+        responsePage.setRecords(result.getRecords().stream().map(this::toResponse).toList());
 
         return Result.success(responsePage);
     }
 
-    private CandidateResponse convertToResponse(Candidate candidate) {
+    /**
+     * 将 Candidate 实体转换为 API 响应，并对敏感字段脱敏
+     */
+    private CandidateResponse toResponse(Candidate candidate) {
         CandidateResponse response = new CandidateResponse();
         BeanUtils.copyProperties(candidate, response);
+        response.setPhone(DataMaskUtil.maskPhone(candidate.getPhone()));
+        response.setEmail(DataMaskUtil.maskEmail(candidate.getEmail()));
         return response;
     }
 }

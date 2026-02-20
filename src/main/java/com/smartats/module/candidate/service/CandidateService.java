@@ -3,17 +3,25 @@ package com.smartats.module.candidate.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartats.common.constants.RedisKeyConstants;
+import com.smartats.module.candidate.dto.CandidateQueryRequest;
 import com.smartats.module.candidate.entity.Candidate;
 import com.smartats.module.candidate.mapper.CandidateMapper;
 import com.smartats.module.resume.dto.CandidateInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 候选人服务
@@ -25,6 +33,10 @@ public class CandidateService {
 
     private final CandidateMapper candidateMapper;
     private final ObjectMapper objectMapper;
+    private final StringRedisTemplate redisTemplate;
+
+    /** 候选人缓存 TTL（分钟） */
+    private static final long CACHE_TTL_MINUTES = 30;
 
     /**
      * 创建候选人记录
@@ -43,44 +55,14 @@ public class CandidateService {
             return updateCandidate(existing.getId(), candidateInfo, rawJson);
         }
 
-        // 创建新记录
-        Candidate candidate = new Candidate();
+        Candidate candidate = buildFromCandidateInfo(new Candidate(), candidateInfo, rawJson);
         candidate.setResumeId(resumeId);
-
-        // 基本信息
-        candidate.setName(candidateInfo.getName());
-        candidate.setPhone(candidateInfo.getPhone());
-        candidate.setEmail(candidateInfo.getEmail());
-        candidate.setGender(normalizeGender(candidateInfo.getGender()));
-        candidate.setAge(candidateInfo.getAge());
-
-        // 教育信息
-        candidate.setEducation(candidateInfo.getEducation());
-        candidate.setSchool(candidateInfo.getSchool());
-        candidate.setMajor(candidateInfo.getMajor());
-        candidate.setGraduationYear(candidateInfo.getGraduationYear());
-
-        // 工作信息
-        candidate.setWorkYears(candidateInfo.getWorkYears());
-        candidate.setCurrentCompany(candidateInfo.getCurrentCompany());
-        candidate.setCurrentPosition(candidateInfo.getCurrentPosition());
-
-        // 技能与经历
-        candidate.setSkills(candidateInfo.getSkills());
-        candidate.setWorkExperience(convertWorkExperience(candidateInfo));
-        candidate.setProjectExperience(convertProjectExperience(candidateInfo));
-        candidate.setSelfEvaluation(candidateInfo.getSelfEvaluation());
-
-        // AI 解析元数据：直接存储 AI 原始响应
-        candidate.setRawJson(rawJson);
         LocalDateTime now = LocalDateTime.now();
         candidate.setParsedAt(now);
         candidate.setCreatedAt(now);
         candidate.setUpdatedAt(now);
 
-        // 保存
         candidateMapper.insert(candidate);
-
         log.info("候选人记录创建成功: candidateId={}", candidate.getId());
         return candidate;
     }
@@ -94,39 +76,18 @@ public class CandidateService {
 
         Candidate candidate = candidateMapper.selectById(id);
         if (candidate == null) {
-            throw new RuntimeException("候选人不存在");
+            throw new RuntimeException("候选人不存在: id=" + id);
         }
 
-        // 更新字段
-        candidate.setName(candidateInfo.getName());
-        candidate.setPhone(candidateInfo.getPhone());
-        candidate.setEmail(candidateInfo.getEmail());
-        candidate.setGender(normalizeGender(candidateInfo.getGender()));
-        candidate.setAge(candidateInfo.getAge());
-
-        candidate.setEducation(candidateInfo.getEducation());
-        candidate.setSchool(candidateInfo.getSchool());
-        candidate.setMajor(candidateInfo.getMajor());
-        candidate.setGraduationYear(candidateInfo.getGraduationYear());
-
-        candidate.setWorkYears(candidateInfo.getWorkYears());
-        candidate.setCurrentCompany(candidateInfo.getCurrentCompany());
-        candidate.setCurrentPosition(candidateInfo.getCurrentPosition());
-
-        candidate.setSkills(candidateInfo.getSkills());
-        candidate.setWorkExperience(convertWorkExperience(candidateInfo));
-        candidate.setProjectExperience(convertProjectExperience(candidateInfo));
-        candidate.setSelfEvaluation(candidateInfo.getSelfEvaluation());
-
-        // AI 解析元数据：直接存储 AI 原始响应
-        candidate.setRawJson(rawJson);
+        buildFromCandidateInfo(candidate, candidateInfo, rawJson);
         candidate.setParsedAt(LocalDateTime.now());
         candidate.setUpdatedAt(LocalDateTime.now());
 
         candidateMapper.updateById(candidate);
+        evictCache(id);
 
-        log.info("候选人记录更新成功: candidateId={}", candidate.getId());
-        return candidate;
+        log.info("候选人记录更新成功: candidateId={}", id);
+        return candidateMapper.selectById(id);
     }
 
     /**
@@ -139,10 +100,40 @@ public class CandidateService {
     }
 
     /**
-     * 根据 ID 查询候选人
+     * 根据 ID 查询候选人详情，优先从 Redis 缓存读取
      */
     public Candidate getById(Long id) {
-        return candidateMapper.selectById(id);
+        String cacheKey = RedisKeyConstants.CACHE_CANDIDATE_KEY_PREFIX + id;
+
+        // 1. 查缓存
+        String cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            try {
+                return objectMapper.readValue(cached, Candidate.class);
+            } catch (JsonProcessingException e) {
+                log.warn("候选人缓存反序列化失败，降级查库: id={}", id, e);
+            }
+        }
+
+        // 2. 查数据库
+        Candidate candidate = candidateMapper.selectById(id);
+        if (candidate == null) {
+            return null;
+        }
+
+        // 3. 回填缓存
+        try {
+            redisTemplate.opsForValue().set(
+                    cacheKey,
+                    objectMapper.writeValueAsString(candidate),
+                    CACHE_TTL_MINUTES,
+                    TimeUnit.MINUTES
+            );
+        } catch (JsonProcessingException e) {
+            log.warn("候选人写入缓存失败（不影响业务）: id={}", id, e);
+        }
+
+        return candidate;
     }
 
     /**
@@ -152,8 +143,9 @@ public class CandidateService {
     public Candidate saveManual(Candidate candidate) {
         candidate.setUpdatedAt(LocalDateTime.now());
         candidateMapper.updateById(candidate);
+        evictCache(candidate.getId());
         log.info("候选人手动更新成功: candidateId={}", candidate.getId());
-        return candidateMapper.selectById(candidate.getId());
+        return getById(candidate.getId());
     }
 
     /**
@@ -162,73 +154,128 @@ public class CandidateService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteById(Long id) {
         candidateMapper.deleteById(id);
+        evictCache(id);
         log.info("候选人删除成功: candidateId={}", id);
     }
 
     /**
-     * 分页查询候选人列表，支持关键字模糊搜索（姓名/手机/邮箱/公司/职位）
+     * 分页查询候选人列表，支持多维度高级筛选
+     * <ul>
+     *   <li>keyword  — 姓名/邮箱/公司/职位 模糊</li>
+     *   <li>education — 学历精确匹配</li>
+     *   <li>skill    — 技能 JSON_CONTAINS</li>
+     *   <li>minWorkYears / maxWorkYears — 工作年限范围</li>
+     *   <li>currentPosition — 当前职位关键字</li>
+     * </ul>
      */
-    public Page<Candidate> listCandidates(String keyword, int page, int pageSize) {
+    public Page<Candidate> listCandidates(CandidateQueryRequest request) {
+        int page = Math.max(1, request.getPage());
+        int pageSize = Math.min(100, Math.max(1, request.getPageSize()));
+
         Page<Candidate> pageParam = new Page<>(page, pageSize);
         LambdaQueryWrapper<Candidate> wrapper = new LambdaQueryWrapper<>();
-        if (StringUtils.hasText(keyword)) {
+
+        // ① 通用关键字
+        if (StringUtils.hasText(request.getKeyword())) {
+            String kw = request.getKeyword().trim();
             wrapper.and(w -> w
-                    .like(Candidate::getName, keyword.trim())
-                    .or().like(Candidate::getPhone, keyword.trim())
-                    .or().like(Candidate::getEmail, keyword.trim())
-                    .or().like(Candidate::getCurrentCompany, keyword.trim())
-                    .or().like(Candidate::getCurrentPosition, keyword.trim())
+                    .like(Candidate::getName, kw)
+                    .or().like(Candidate::getEmail, kw)
+                    .or().like(Candidate::getCurrentCompany, kw)
+                    .or().like(Candidate::getCurrentPosition, kw)
             );
         }
+
+        // ② 学历精确匹配
+        if (StringUtils.hasText(request.getEducation())) {
+            wrapper.eq(Candidate::getEducation, request.getEducation().trim());
+        }
+
+        // ③ 技能 JSON_CONTAINS
+        if (StringUtils.hasText(request.getSkill())) {
+            wrapper.apply("JSON_CONTAINS(skills, JSON_QUOTE({0}))", request.getSkill().trim());
+        }
+
+        // ④ 工作年限范围
+        if (request.getMinWorkYears() != null) {
+            wrapper.ge(Candidate::getWorkYears, request.getMinWorkYears());
+        }
+        if (request.getMaxWorkYears() != null) {
+            wrapper.le(Candidate::getWorkYears, request.getMaxWorkYears());
+        }
+
+        // ⑤ 当前职位关键字
+        if (StringUtils.hasText(request.getCurrentPosition())) {
+            wrapper.like(Candidate::getCurrentPosition, request.getCurrentPosition().trim());
+        }
+
         wrapper.orderByDesc(Candidate::getCreatedAt);
         return candidateMapper.selectPage(pageParam, wrapper);
     }
 
     /**
-     * 转换工作经历
+     * 删除候选人详情缓存（写后失效策略）
      */
-    private java.util.List<java.util.Map<String, Object>> convertWorkExperience(CandidateInfo candidateInfo) {
-        if (candidateInfo.getWorkExperience() == null) {
-            return null;
-        }
-        return candidateInfo.getWorkExperience().stream()
-                .map(this::convertToMap)
-                .toList();
+    private void evictCache(Long id) {
+        redisTemplate.delete(RedisKeyConstants.CACHE_CANDIDATE_KEY_PREFIX + id);
+        log.debug("候选人缓存已失效: id={}", id);
     }
 
     /**
-     * 转换项目经历
+     * 将 CandidateInfo 字段填充到 Candidate 实体（复用于创建和更新场景）
      */
-    private java.util.List<java.util.Map<String, Object>> convertProjectExperience(CandidateInfo candidateInfo) {
-        if (candidateInfo.getProjectExperience() == null) {
-            return null;
-        }
-        return candidateInfo.getProjectExperience().stream()
-                .map(this::convertToMap)
-                .toList();
+    private Candidate buildFromCandidateInfo(Candidate candidate, CandidateInfo info, String rawJson) {
+        candidate.setName(info.getName());
+        candidate.setPhone(info.getPhone());
+        candidate.setEmail(info.getEmail());
+        candidate.setGender(normalizeGender(info.getGender()));
+        candidate.setAge(info.getAge());
+
+        candidate.setEducation(info.getEducation());
+        candidate.setSchool(info.getSchool());
+        candidate.setMajor(info.getMajor());
+        candidate.setGraduationYear(info.getGraduationYear());
+
+        candidate.setWorkYears(info.getWorkYears());
+        candidate.setCurrentCompany(info.getCurrentCompany());
+        candidate.setCurrentPosition(info.getCurrentPosition());
+
+        candidate.setSkills(info.getSkills());
+        candidate.setWorkExperience(convertToMapList(info.getWorkExperience()));
+        candidate.setProjectExperience(convertToMapList(info.getProjectExperience()));
+        candidate.setSelfEvaluation(info.getSelfEvaluation());
+        candidate.setRawJson(rawJson);
+        return candidate;
     }
 
-    @SuppressWarnings("unchecked")
-    private java.util.Map<String, Object> convertToMap(Object obj) {
-        try {
-            String json = objectMapper.writeValueAsString(obj);
-            return objectMapper.readValue(json, java.util.Map.class);
-        } catch (JsonProcessingException e) {
-            log.error("对象转换失败: obj={}", obj, e);
-            return new java.util.HashMap<>();
+    /**
+     * 将对象列表转换为 {@code List<Map<String, Object>>}（用于 JSON 字段存储）
+     */
+    private List<Map<String, Object>> convertToMapList(List<?> list) {
+        if (list == null) {
+            return null;
         }
+        return list.stream()
+                .map(obj -> {
+                    try {
+                        String json = objectMapper.writeValueAsString(obj);
+                        return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+                    } catch (JsonProcessingException e) {
+                        log.error("对象转换为 Map 失败: obj={}", obj, e);
+                        return new HashMap<String, Object>();
+                    }
+                })
+                .toList();
     }
 
     /**
      * 规范化 gender 字段为数据库 ENUM 合法值
-     * 将 AI 返回的中英文内山形式均转为 MALE / FEMALE / UNKNOWN
      */
     private String normalizeGender(String raw) {
         if (raw == null || raw.isBlank()) {
             return "UNKNOWN";
         }
-        String val = raw.trim().toUpperCase();
-        return switch (val) {
+        return switch (raw.trim().toUpperCase()) {
             case "男", "MALE", "M", "BOY", "MAN" -> "MALE";
             case "女", "FEMALE", "F", "GIRL", "WOMAN" -> "FEMALE";
             default -> "UNKNOWN";

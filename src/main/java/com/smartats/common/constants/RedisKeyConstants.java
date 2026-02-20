@@ -123,6 +123,21 @@ public class RedisKeyConstants {
     public static final String COUNTER_JOB_VIEW_PREFIX = "counter:job:view:";
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 候选人缓存相关
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 候选人详情缓存 Key 前缀
+     * <p>
+     * 完整格式：cache:candidate:{candidateId}
+     * <p>
+     * Value：JSON 格式的候选人详情对象
+     * <p>
+     * TTL：30分钟
+     */
+    public static final String CACHE_CANDIDATE_KEY_PREFIX = "cache:candidate:";
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 角色前缀
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
