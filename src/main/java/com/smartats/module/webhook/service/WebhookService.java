@@ -227,16 +227,16 @@ public class WebhookService {
         failureCounters.put(webhook.getId(), 0);
 
         // 记录日志
-        WebhookLog log = new WebhookLog();
-        log.setWebhookId(webhook.getId());
-        log.setEventType(eventCode);
-        log.setPayload(payload);
-        log.setResponseStatus(response.code());
-        log.setStatus("SUCCESS");
-        log.setRetryCount(0);
-        log.setDuration(duration);
-        log.setCreatedAt(LocalDateTime.now());
-        webhookLogMapper.insert(log);
+        WebhookLog webhookLog = new WebhookLog();
+        webhookLog.setWebhookId(webhook.getId());
+        webhookLog.setEventType(eventCode);
+        webhookLog.setPayload(payload);
+        webhookLog.setResponseStatus(response.code());
+        webhookLog.setStatus("SUCCESS");
+        webhookLog.setRetryCount(0);
+        webhookLog.setDuration(duration);
+        webhookLog.setCreatedAt(LocalDateTime.now());
+        webhookLogMapper.insert(webhookLog);
 
         log.info("Webhook 发送成功: webhookId={}, event={}, duration={}ms",
                 webhook.getId(), eventCode, duration);
@@ -265,17 +265,17 @@ public class WebhookService {
         failureCounters.put(webhook.getId(), newFailureCount);
 
         // 记录日志
-        WebhookLog log = new WebhookLog();
-        log.setWebhookId(webhook.getId());
-        log.setEventType(eventCode);
-        log.setPayload(payload);
-        log.setResponseStatus(response != null ? response.code() : null);
-        log.setErrorMessage(errorMessage);
-        log.setStatus("FAILED");
-        log.setRetryCount(0);
-        log.setDuration(duration);
-        log.setCreatedAt(LocalDateTime.now());
-        webhookLogMapper.insert(log);
+        WebhookLog webhookLog = new WebhookLog();
+        webhookLog.setWebhookId(webhook.getId());
+        webhookLog.setEventType(eventCode);
+        webhookLog.setPayload(payload);
+        webhookLog.setResponseStatus(response != null ? response.code() : null);
+        webhookLog.setErrorMessage(errorMessage);
+        webhookLog.setStatus("FAILED");
+        webhookLog.setRetryCount(0);
+        webhookLog.setDuration(duration);
+        webhookLog.setCreatedAt(LocalDateTime.now());
+        webhookLogMapper.insert(webhookLog);
 
         log.error("Webhook 发送失败: webhookId={}, event={}, error={}",
                 webhook.getId(), eventCode, errorMessage);

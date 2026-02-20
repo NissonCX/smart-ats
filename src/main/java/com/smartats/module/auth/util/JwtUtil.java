@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -60,6 +61,29 @@ public class JwtUtil {
 
     public String getUsernameFromToken(String token) {
         return parseToken(token).getSubject();
+    }
+
+    /**
+     * 从 HttpServletRequest 中提取用户 ID
+     */
+    public Long getUserIdFromToken(HttpServletRequest request) {
+        String token = extractTokenFromRequest(request);
+        if (token == null) {
+            return null;
+        }
+        Claims claims = parseToken(token);
+        return claims.get("userId", Long.class);
+    }
+
+    /**
+     * 从请求中提取 Token
+     */
+    private String extractTokenFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
     }
 
     public boolean isTokenExpired(String token) {

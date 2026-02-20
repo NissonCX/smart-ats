@@ -2,7 +2,7 @@ package com.smartats.module.webhook.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.URL;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.List;
 public class WebhookCreateRequest {
 
     @NotBlank(message = "Webhook URL 不能为空")
-    @URL(message = "Webhook URL 格式不正确")
+    @Pattern(regexp = "^https?://[\\w\\-]+(\\.[\\w\\-]+)+([\\w\\-.,@?^=%&:/~+#]*[\\w\\-@?^=%&/~+#])?$", message = "Webhook URL 格式不正确")
     private String url;
 
     @NotNull(message = "事件列表不能为空")
