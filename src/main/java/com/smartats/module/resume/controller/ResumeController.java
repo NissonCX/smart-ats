@@ -1,8 +1,10 @@
 package com.smartats.module.resume.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.smartats.common.result.Result;
 import com.smartats.module.resume.dto.ResumeUploadResponse;
 import com.smartats.module.resume.dto.TaskStatusResponse;
+import com.smartats.module.resume.entity.Resume;
 import com.smartats.module.resume.service.ResumeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,5 +59,41 @@ public class ResumeController {
         TaskStatusResponse response = resumeService.getTaskStatus(taskId);
 
         return Result.success(response);
+    }
+
+    /**
+     * 获取简历详情
+     *
+     * @param id             简历ID
+     * @param authentication 登录用户（仅能查看自己的简历）
+     * @return 简历详情
+     */
+    @GetMapping("/{id}")
+    public Result<Resume> getResumeById(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+        Resume resume = resumeService.getResumeById(id, userId);
+        return Result.success(resume);
+    }
+
+    /**
+     * 分页查询简历列表（当前用户的简历）
+     *
+     * @param page           页码（默认1）
+     * @param size           每页条数（默认10）
+     * @param authentication 登录用户
+     * @return 简历分页列表
+     */
+    @GetMapping
+    public Result<Page<Resume>> listResumes(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+        Page<Resume> result = resumeService.listResumes(userId, page, size);
+        return Result.success(result);
     }
 }

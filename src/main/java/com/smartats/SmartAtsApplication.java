@@ -19,7 +19,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *    2. 作为包扫描的起点（只扫描 com.smartats 下的类）
  *    3. 分离配置和业务代码
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = {
+        org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration.class
+})
 @EnableScheduling
 @MapperScan("com.smartats.module.*.mapper")
 public class SmartAtsApplication {

@@ -33,6 +33,21 @@ public class FileValidationUtil {
     }
 
     /**
+     * 获取文件的真实 MIME 类型（字节数组版本，推荐使用）
+     *
+     * @param fileBytes 文件字节数组
+     * @param originalFilename 原始文件名（用于辅助判断）
+     * @return 真实的 MIME 类型，如果无法识别则返回 null
+     */
+    public static String detectRealMimeType(byte[] fileBytes, String originalFilename) {
+        if (fileBytes == null || fileBytes.length < 4) {
+            return null;
+        }
+        byte[] header = fileBytes;
+        return parseMimeType(header, originalFilename);
+    }
+
+    /**
      * 获取文件的真实 MIME 类型
      * 根据文件内容判断，而不是依赖文件扩展名或 Content-Type
      *
@@ -44,33 +59,55 @@ public class FileValidationUtil {
         try {
             byte[] header = readFileHeader(inputStream);
 
-            // 检查是否为 PDF
-            if (header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44 && header[3] == 0x46) {
-                return "application/pdf";
-            }
-
-            // 检查是否为 DOC (旧版 Word)
-            if (header[0] == (byte) 0xD0 && header[1] == 0x43 && header[2] == 0x11 && header[3] == 0xE0) {
-                return "application/msword";
-            }
-
-            // 检查是否为 DOCX (新版 Word，实际是 ZIP 格式)
-            if (header[0] == 0x50 && header[1] == 0x4B && header[2] == 0x03 && header[3] == 0x04) {
-                // 进一步检查是否为 DOCX（ZIP 格式）
-                // DOCX 文件包含 [Content_Types].xml
-                if (originalFilename != null && originalFilename.toLowerCase().endsWith(".docx")) {
-                    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-                }
-                return "application/zip";
-            }
-
-            log.warn("无法识别的文件类型，文件头: {} {} {} {}", header[0], header[1], header[2], header[3]);
-            return null;
+            return parseMimeType(header, originalFilename);
 
         } catch (IOException e) {
             log.error("读取文件头失败", e);
             return null;
         }
+    }
+
+    /**
+     * 根据文件头字节解析 MIME 类型（内部公共逻辑）
+     */
+    private static String parseMimeType(byte[] header, String originalFilename) {
+        // 检查是否为 PDF
+        if (header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44 && header[3] == 0x46) {
+            return "application/pdf";
+        }
+
+        // 检查是否为 DOC (旧版 Word)
+        if (header[0] == (byte) 0xD0 && header[1] == (byte) 0xCF && header[2] == 0x11 && header[3] == (byte) 0xE0) {
+            return "application/msword";
+        }
+
+        // 检查是否为 DOCX (新版 Word，实际是 ZIP 格式)
+        if (header[0] == 0x50 && header[1] == 0x4B && header[2] == 0x03 && header[3] == 0x04) {
+            if (originalFilename != null && originalFilename.toLowerCase().endsWith(".docx")) {
+                return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            }
+            return "application/zip";
+        }
+
+        log.warn("无法识别的文件类型，文件头: 0x{} 0x{} 0x{} 0x{}",
+                Integer.toHexString(header[0] & 0xFF),
+                Integer.toHexString(header[1] & 0xFF),
+                Integer.toHexString(header[2] & 0xFF),
+                Integer.toHexString(header[3] & 0xFF));
+        return null;
+    }
+
+    /**
+     * 验证文件是否为声明的类型（字节数组版本，推荐使用，避免流 mark/reset 问题）
+     *
+     * @param fileBytes 文件字节数组
+     * @param declaredContentType 声明的 Content-Type
+     * @param originalFilename 原始文件名
+     * @return true 如果文件真实类型与声明一致
+     */
+    public static boolean validateFileType(byte[] fileBytes, String declaredContentType, String originalFilename) {
+        String realMimeType = detectRealMimeType(fileBytes, originalFilename);
+        return checkMimeMatch(realMimeType, declaredContentType, originalFilename);
     }
 
     /**
@@ -88,7 +125,13 @@ public class FileValidationUtil {
             return false;
         }
 
-        // 验证声明的类型是否与真实类型匹配
+        return checkMimeMatch(realMimeType, declaredContentType, originalFilename);
+    }
+
+    private static boolean checkMimeMatch(String realMimeType, String declaredContentType, String originalFilename) {
+        if (realMimeType == null) {
+            return false;
+        }
         boolean isValid = switch (declaredContentType) {
             case "application/pdf" -> realMimeType.equals("application/pdf");
             case "application/msword" -> realMimeType.equals("application/msword");
@@ -96,22 +139,21 @@ public class FileValidationUtil {
                     realMimeType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
             default -> false;
         };
-
         if (!isValid) {
             log.warn("文件类型不匹配: 声明={}, 真实={}, 文件名={}", declaredContentType, realMimeType, originalFilename);
         }
-
         return isValid;
     }
 
     /**
-     * 读取文件头（前 8 字节）
+     * 读取文件头（前 8 字节），使用 BufferedInputStream 包装以支持 mark/reset
      */
     private static byte[] readFileHeader(InputStream inputStream) throws IOException {
+        java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(inputStream);
         byte[] header = new byte[8];
-        inputStream.mark(8);
-        int bytesRead = inputStream.read(header);
-        inputStream.reset();
+        buffered.mark(8);
+        int bytesRead = buffered.read(header);
+        buffered.reset();
 
         if (bytesRead < 4) {
             throw new IOException("文件太小，无法读取文件头");

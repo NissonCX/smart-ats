@@ -7,10 +7,17 @@ import com.smartats.module.resume.dto.ResumeParseMessage;
 import com.smartats.module.resume.dto.TaskStatusResponse;
 import com.smartats.module.resume.entity.Resume;
 import com.smartats.module.resume.mapper.ResumeMapper;
+import com.smartats.module.candidate.entity.Candidate;
+import com.smartats.module.candidate.service.CandidateService;
+import com.smartats.module.resume.dto.CandidateInfo;
+import com.smartats.module.resume.service.ResumeContentExtractor;
+import com.smartats.module.resume.service.ResumeParseService;
 import com.smartats.module.webhook.enums.WebhookEventType;
 import com.smartats.module.webhook.service.WebhookService;
+import org.redisson.api.RLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -25,11 +32,14 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class ResumeParseConsumer {
-
-    private final ResumeMapper resumeMapper;
+    private final ResumeContentExtractor contentExtractor;
+    private final ResumeParseService parseService;
+    private final CandidateService candidateService;
+    private final RedissonClient redissonClient;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final WebhookService webhookService;
+    private final ResumeMapper resumeMapper;
 
     private static final String TASK_STATUS_KEY_PREFIX = "task:resume:";
     private static final String LOCK_KEY_PREFIX = "lock:resume:";
@@ -49,22 +59,31 @@ public class ResumeParseConsumer {
 
         log.info("收到简历解析消息: taskId={}, resumeId={}", taskId, resumeId);
 
-        try {
-            // 1. 幂等检查（Redis 标记）
-            String idempotentKey = "idempotent:resume:" + resumeId;
-            Boolean alreadyProcessed = redisTemplate.opsForValue()
-                    .setIfAbsent(idempotentKey, "1", 1, java.util.concurrent.TimeUnit.HOURS);
+        // 1. 幂等检查（Redis 标记）
+        String idempotentKey = "idempotent:resume:" + resumeId;
+        Boolean alreadyProcessed = redisTemplate.opsForValue()
+                .setIfAbsent(idempotentKey, "1", 1, java.util.concurrent.TimeUnit.HOURS);
 
-            if (Boolean.FALSE.equals(alreadyProcessed)) {
-                log.warn("简历已处理过，跳过: resumeId={}", resumeId);
+        if (Boolean.FALSE.equals(alreadyProcessed)) {
+            log.warn("简历已处理过，跳过: resumeId={}", resumeId);
+            channel.basicAck(deliveryTag, false);
+            return;
+        }
+
+        // 2. 获取分布式锁（防止重复解析）
+        String lockKey = LOCK_KEY_PREFIX + fileHash;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            // 尝试获取锁，最多等待 10 秒，锁自动释放时间 300 秒
+            boolean acquired = lock.tryLock(10, 300, java.util.concurrent.TimeUnit.SECONDS);
+            if (!acquired) {
+                log.warn("获取锁失败，可能有其他实例正在处理: resumeId={}", resumeId);
                 channel.basicAck(deliveryTag, false);
                 return;
             }
 
-            // 2. 获取分布式锁（防止重复解析）
-            String lockKey = LOCK_KEY_PREFIX + fileHash;
-            // TODO: 使用 Redisson 获取分布式锁
-            // 这里简化处理，实际应该使用 Redisson
+            log.info("获取锁成功，开始处理: resumeId={}", resumeId);
 
             // 3. 更新任务状态为 PROCESSING
             updateTaskStatus(taskId, "PROCESSING", 10);
@@ -78,33 +97,49 @@ public class ResumeParseConsumer {
                 return;
             }
 
-            // 5. 模拟 AI 解析（TODO: 实际调用 Spring AI）
-            log.info("开始解析简历: resumeId={}, fileName={}", resumeId, resume.getFileName());
+            // 5. 提取文件内容
+            log.info("开始提取文件内容: resumeId={}, fileName={}", resumeId, resume.getFileName());
+            String content = contentExtractor.extractText(resume.getFileUrl(), resume.getFileType());
+            log.info("文件内容提取完成: contentLength={}", content.length());
+            updateTaskStatus(taskId, "PROCESSING", 30);
 
-            // 模拟耗时操作
-            Thread.sleep(3000);
+            // 6. AI 解析
+            log.info("开始 AI 解析: resumeId={}", resumeId);
+            ResumeParseService.ParseResult parseResult = parseService.parseResumeWithRaw(content);
+            CandidateInfo candidateInfo = parseResult.candidateInfo();
+            String rawJson = parseResult.rawResponse();
+            log.info("AI 解析完成: name={}, phone={}", candidateInfo.getName(), candidateInfo.getPhone());
+            updateTaskStatus(taskId, "PROCESSING", 70);
 
-            // TODO: 实际应该调用 AI 解析并保存到 candidates 表
+            // 7. 保存候选人信息
+            log.info("保存候选人信息: resumeId={}", resumeId);
+            Candidate candidate = candidateService.createCandidate(resumeId, candidateInfo, rawJson);
+            log.info("候选人信息保存成功: candidateId={}", candidate.getId());
+            updateTaskStatus(taskId, "PROCESSING", 90);
 
-            // 6. 更新任务状态为 COMPLETED
+            // 8. 更新任务状态为 COMPLETED
             updateTaskStatus(taskId, "COMPLETED", 100);
 
-            // 7. 更新简历状态
+            // 9. 更新简历状态
             resume.setStatus("COMPLETED");
             resumeMapper.updateById(resume);
 
-            log.info("简历解析完成: taskId={}, resumeId={}", taskId, resumeId);
+            log.info("简历解析完成: taskId={}, resumeId={}, candidateId={}", taskId, resumeId, candidate.getId());
 
-            // 8. 触发 Webhook 事件
-            triggerWebhookEvent(WebhookEventType.RESUME_PARSE_COMPLETED, resume, taskId, null);
+            // 10. 触发 Webhook 事件（传递候选人信息）
+            triggerWebhookEvent(WebhookEventType.RESUME_PARSE_COMPLETED, resume, taskId, null, candidate.getId());
 
-            // 9. 手动确认消息
+            // 11. 手动确认消息
             channel.basicAck(deliveryTag, false);
 
         } catch (InterruptedException e) {
             log.error("简历解析被中断: taskId={}", taskId, e);
             handleFailedTask(taskId, "解析被中断");
             retryOrReject(channel, deliveryTag, message);
+
+            // 恢复中断状态
+            Thread.currentThread().interrupt();
+
         } catch (Exception e) {
             log.error("简历解析失败: taskId={}", taskId, e);
             handleFailedTask(taskId, "解析失败: " + e.getMessage());
@@ -112,17 +147,24 @@ public class ResumeParseConsumer {
             // 获取简历信息用于 Webhook
             Resume resume = resumeMapper.selectById(resumeId);
             if (resume != null) {
-                triggerWebhookEvent(WebhookEventType.RESUME_PARSE_FAILED, resume, taskId, e.getMessage());
+                triggerWebhookEvent(WebhookEventType.RESUME_PARSE_FAILED, resume, taskId, e.getMessage(), null);
             }
 
             retryOrReject(channel, deliveryTag, message);
+
+        } finally {
+            // 释放锁（如果当前线程持有锁）
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+                log.info("释放锁成功: lockKey={}", lockKey);
+            }
         }
     }
 
     /**
      * 触发 Webhook 事件
      */
-    private void triggerWebhookEvent(WebhookEventType eventType, Resume resume, String taskId, String errorMessage) {
+    private void triggerWebhookEvent(WebhookEventType eventType, Resume resume, String taskId, String errorMessage, Long candidateId) {
         try {
             Map<String, Object> data = new HashMap<>();
             data.put("taskId", taskId);
@@ -132,6 +174,10 @@ public class ResumeParseConsumer {
             data.put("fileSize", resume.getFileSize());
             data.put("fileType", resume.getFileType());
             data.put("status", resume.getStatus());
+
+            if (candidateId != null) {
+                data.put("candidateId", candidateId);
+            }
 
             if (errorMessage != null) {
                 data.put("errorMessage", errorMessage);

@@ -29,8 +29,8 @@
 |--------|------|------|
 | **Spring AI** | 1.0.0-M4+ | Spring 官方 AI 框架 |
 | **智谱 AI** | GLM-4-Flash / GLM-5 | 国产大模型，中文优化 |
-| **模型选择** | glm-4-flash | 开发测试（¥0.1/百万 tokens） |
-| **生产模型** | glm-4-air | 生产环境（¥0.5/百万 tokens） |
+| **模型选择** | glm-4-flash-250414 | 开发测试（¥0.1/百万 tokens） |
+| **生产模型** | glm-4-air-250414 | 生产环境（¥0.5/百万 tokens） |
 
 ### 为什么选择这个方案？
 
@@ -187,10 +187,11 @@ public Result<TaskStatusResponse> getTaskStatus(@PathVariable String taskId)
 </properties>
 
 <dependencies>
-    <!-- ========== Spring AI 智谱 AI ========== -->
+    <!-- ========== Spring AI（使用 OpenAI 兼容模式调用智谱 AI）========== -->
+    <!-- 注意：智谱 API 完全兼容 OpenAI 格式，可以直接使用 Spring AI 的 OpenAI starter -->
     <dependency>
         <groupId>org.springframework.ai</groupId>
-        <artifactId>spring-ai-starter-model-zhipuai</artifactId>
+        <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
         <version>${spring-ai.version}</version>
     </dependency>
 
@@ -237,11 +238,11 @@ public Result<TaskStatusResponse> getTaskStatus(@PathVariable String taskId)
 # ========== 智谱 AI 配置 ==========
 ZHIPU_API_KEY=你的API密钥
 ZHIPU_API_BASE=https://open.bigmodel.cn/api/paas/v4
-ZHIPU_MODEL=glm-4-flash
+ZHIPU_MODEL=glm-4-flash-250414
 
 # 模型说明：
-# - glm-4-flash：速度快、价格低，适合开发测试（¥0.1/百万 tokens）
-# - glm-4-air：性价比高，适合生产环境（¥0.5/百万 tokens）
+# - glm-4-flash-250414：速度快、价格低，适合开发测试（¥0.1/百万 tokens）
+# - glm-4-air-250414：性价比高，适合生产环境（¥0.5/百万 tokens）
 # - glm-4：能力更强，适合复杂任务（¥1.0/百万 tokens）
 # - glm-5：最新旗舰，编程能力最强（2026年2月发布）
 ```
@@ -256,19 +257,26 @@ ZHIPU_MODEL=glm-4-flash
 ```yaml
 spring:
   ai:
-    zhipuai:
+    # 使用 OpenAI 兼容模式（智谱 API 完全兼容 OpenAI 格式）
+    openai:
       # 智谱 API Key（从环境变量读取）
       api-key: ${ZHIPU_API_KEY}
+      # 智谱 API 地址（兼容 OpenAI 格式）
+      base-url: https://open.bigmodel.cn/api/paas/v4
       chat:
         enabled: true
         options:
           # 模型选择
-          model: ${ZHIPU_MODEL:glm-4-flash}
+          model: ${ZHIPU_MODEL:glm-4-flash-250414}
           # 温度（0-1，简历解析建议 0.3 获得更确定的输出）
           temperature: 0.3
           # 最大 token 数
           max-tokens: 4000
 ```
+
+**为什么使用 `openai` 配置而不是 `zhipuai`**：
+
+Spring AI 1.0.0-M4 版本中，`spring-ai-starter-model-zhipuai` 依赖可能不存在。由于智谱 AI API **完全兼容 OpenAI 格式**，可以直接使用 Spring AI 的 OpenAI starter，只需更改 `base-url` 即可。
 
 #### 步骤 1.4：创建数据库表
 
@@ -567,48 +575,61 @@ public class CandidateInfo {
 }
 ```
 
-### 示例 4：ZhipuAiConfig 配置
+### 示例 4：智谱 AI 配置（使用 OpenAI 兼容模式）
 
 ```java
 package com.smartats.config;
 
-import org.springframework.ai.zhipuai.ZhipuAiChatModel;
-import org.springframework.ai.zhipuai.ZhipuAiChatOptions;
-import org.springframework.ai.zhipuai.api.ZhipuAiApi;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 智谱 AI 配置
- * 使用 Spring AI 官方 zhipuai 模块
+ * 智谱 AI 配置（使用 OpenAI 兼容模式）
+ * <p>
+ * 注意：智谱 API 完全兼容 OpenAI 接口格式
+ * 因此使用 Spring AI 的 OpenAI starter，只需更改 base-url 即可
  */
 @Configuration
 public class ZhipuAiConfig {
 
-    @Value("${spring.ai.zhipuai.api-key}")
+    @Value("${spring.ai.openai.api-key}")
     private String apiKey;
 
-    @Value("${spring.ai.zhipuai.chat.options.model:glm-4-flash}")
+    @Value("${spring.ai.openai.base-url:https://open.bigmodel.cn/api/paas/v4}")
+    private String baseUrl;
+
+    @Value("${spring.ai.openai.chat.options.model:glm-4-flash-250414}")
     private String model;
 
-    @Value("${spring.ai.zhipuai.chat.options.temperature:0.3}")
+    @Value("${spring.ai.openai.chat.options.temperature:0.3}")
     private Double temperature;
 
     @Bean
-    public ZhipuAiChatModel zhipuAiChatModel() {
-        ZhipuAiApi api = new ZhipuAiApi(apiKey);
+    public OpenAiChatModel openAiChatModel() {
+        // 创建智谱 API 客户端（使用 OpenAI 兼容接口）
+        OpenAiApi openAiApi = new OpenAiApi(baseUrl, apiKey);
 
-        ZhipuAiChatOptions options = ZhipuAiChatOptions.builder()
-                .withModel(model)
+        OpenAiChatOptions options = OpenAiChatOptions.builder()
+                .withModel(model)           // glm-4-flash-250414
                 .withTemperature(temperature)
                 .withMaxTokens(4000)
                 .build();
 
-        return new ZhipuAiChatModel(api, options);
+        return new OpenAiChatModel(openAiApi, options);
     }
 }
 ```
+
+**为什么这样配置**：
+
+1. **智谱 API 兼容 OpenAI 格式**：请求和响应格式完全一致
+2. **依赖稳定可用**：`spring-ai-openai-spring-boot-starter` 是 Spring AI 的标准依赖
+3. **只需更改 base-url**：将 API 地址指向智谱的服务器
+4. **无需等待 zhipuai starter**：直接使用现有的 OpenAI starter 即可
 
 ### 示例 5：文件内容提取服务
 
@@ -723,7 +744,7 @@ public class ResumeParseService {
 
     private final ChatClient chatClient;
 
-    @Value("${spring.ai.zhipuai.chat.options.model:glm-4-flash}")
+    @Value("${spring.ai.zhipuai.chat.options.model:glm-4-flash-250414}")
     private String model;
 
     public CandidateInfo parseResume(String resumeContent) {

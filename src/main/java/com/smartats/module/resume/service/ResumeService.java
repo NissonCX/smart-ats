@@ -1,6 +1,7 @@
 package com.smartats.module.resume.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
@@ -70,7 +71,8 @@ public class ResumeService {
         Resume existingResume = checkDuplicate(fileHash);
         if (existingResume != null) {
             log.info("文件已存在: hash={}, userId={}", fileHash, userId);
-            return new ResumeUploadResponse(existingResume.getId().toString(), existingResume.getId(), true, "文件已存在，直接使用已有简历");
+            // taskId 为 null：重复文件无需发起解析任务，客户端无需轮询状态
+            return new ResumeUploadResponse(null, existingResume.getId(), true, "文件已存在，直接使用已有简历");
         }
 
         // 4. 生成文件路径
@@ -169,6 +171,32 @@ public class ResumeService {
     }
 
     /**
+     * 根据ID查询简历详情（仅限该用户自己的简历）
+     */
+    public Resume getResumeById(Long id, Long userId) {
+        Resume resume = resumeMapper.selectById(id);
+        if (resume == null) {
+            throw new BusinessException(ResultCode.RESUME_NOT_FOUND);
+        }
+        // 安全校验：只能查看自己的简历
+        if (!resume.getUserId().equals(userId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权访问该简历");
+        }
+        return resume;
+    }
+
+    /**
+     * 分页查询当前用户的简历列表
+     */
+    public Page<Resume> listResumes(Long userId, int pageNum, int pageSize) {
+        Page<Resume> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<Resume> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Resume::getUserId, userId)
+               .orderByDesc(Resume::getCreatedAt);
+        return resumeMapper.selectPage(page, wrapper);
+    }
+
+    /**
      * 校验文件
      */
     private void validateFile(MultipartFile file) {
@@ -191,9 +219,11 @@ public class ResumeService {
         }
 
         // 🔒 安全增强：通过文件头（魔数）验证真实文件类型
+        // 使用 getBytes() 而非 getInputStream() 避免流 mark/reset 不支持的问题
         try {
+            byte[] fileBytes = file.getBytes();
             boolean isValid = FileValidationUtil.validateFileType(
-                    file.getInputStream(),
+                    fileBytes,
                     contentType,
                     file.getOriginalFilename()
             );
@@ -238,11 +268,14 @@ public class ResumeService {
 
     /**
      * 生成对象名（文件路径）
-     * 格式：resumes/2026/02/19/{md5前8位}_{原文件名}
+     * 格式：resumes/2026/02/19/{md5前8位}_{清理后文件名}
+     * 🔒 安全：使用消毒后的文件名防止路径穿越攻击
      */
     private String generateObjectName(String fileHash, String originalFilename) {
         String date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
         String prefix = fileHash.substring(0, 8);
-        return String.format("resumes/%s/%s_%s", date, prefix, originalFilename);
+        // 🔒 对文件名进行清理，防止路径穿越（如 ../../etc/passwd）
+        String safeFilename = FileValidationUtil.sanitizeFilename(originalFilename);
+        return String.format("resumes/%s/%s_%s", date, prefix, safeFilename);
     }
 }
