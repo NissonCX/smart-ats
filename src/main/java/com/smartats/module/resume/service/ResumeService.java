@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
+import com.smartats.common.util.FileValidationUtil;
+import com.smartats.infrastructure.mq.MessagePublisher;
+import com.smartats.module.resume.dto.ResumeParseMessage;
 import com.smartats.module.resume.dto.ResumeUploadResponse;
 import com.smartats.module.resume.dto.TaskStatusResponse;
 import com.smartats.module.resume.entity.Resume;
@@ -40,6 +43,7 @@ public class ResumeService {
     private final FileStorageService fileStorageService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final MessagePublisher messagePublisher;
 
     private static final String RESUME_DEDUP_KEY_PREFIX = "dedup:resume:";
     private static final String TASK_STATUS_KEY_PREFIX = "task:resume:";
@@ -66,12 +70,7 @@ public class ResumeService {
         Resume existingResume = checkDuplicate(fileHash);
         if (existingResume != null) {
             log.info("文件已存在: hash={}, userId={}", fileHash, userId);
-            return new ResumeUploadResponse(
-                    existingResume.getId().toString(),
-                    existingResume.getId(),
-                    true,
-                    "文件已存在，直接使用已有简历"
-            );
+            return new ResumeUploadResponse(existingResume.getId().toString(), existingResume.getId(), true, "文件已存在，直接使用已有简历");
         }
 
         // 4. 生成文件路径
@@ -92,7 +91,8 @@ public class ResumeService {
         // 6. 保存数据库记录
         Resume resume = new Resume();
         resume.setUserId(userId);
-        resume.setFileName(file.getOriginalFilename());
+        // 🔒 安全：使用消毒后的文件名
+        resume.setFileName(FileValidationUtil.sanitizeFilename(file.getOriginalFilename()));
         resume.setFilePath(objectName);
         resume.setFileUrl(fileUrl);
         resume.setFileSize(file.getSize());
@@ -124,17 +124,22 @@ public class ResumeService {
             log.error("任务状态序列化失败: taskKey={}", taskKey, e);
         }
 
-        // 10. 发送 MQ 消息（下一阶段实现）
-        // TODO: 发送 MQ 消息到解析队列
+        // 10. 发送 MQ 消息
+        try {
+            ResumeParseMessage message = new ResumeParseMessage(taskId, resume.getId(), userId, fileHash, 0);
+
+            messagePublisher.sendResumeParseMessage(message);
+
+            log.info("发送解析消息成功: taskId={}, resumeId={}", taskId, resume.getId());
+
+        } catch (Exception e) {
+            log.error("发送解析消息失败: taskId={}", taskId, e);
+            // 不抛异常，允许用户重试查询状态
+        }
 
         log.info("简历上传成功: resumeId={}, taskId={}, hash={}", resume.getId(), taskId, fileHash);
 
-        return new ResumeUploadResponse(
-                taskId,
-                resume.getId(),
-                false,
-                "简历上传成功，正在解析中"
-        );
+        return new ResumeUploadResponse(taskId, resume.getId(), false, "简历上传成功，正在解析中");
     }
 
     /**
@@ -177,13 +182,29 @@ public class ResumeService {
             throw new BusinessException(ResultCode.FILE_SIZE_EXCEEDED);
         }
 
-        // 校验文件类型
+        // 校验文件类型（通过 Content-Type）
         String contentType = file.getContentType();
-        if (contentType == null ||
-                (!contentType.equals("application/pdf") &&
-                 !contentType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document") &&
-                 !contentType.equals("application/msword"))) {
+        if (contentType == null || (!contentType.equals("application/pdf")
+                && !contentType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                && !contentType.equals("application/msword"))) {
             throw new BusinessException(ResultCode.FILE_TYPE_NOT_SUPPORTED);
+        }
+
+        // 🔒 安全增强：通过文件头（魔数）验证真实文件类型
+        try {
+            boolean isValid = FileValidationUtil.validateFileType(
+                    file.getInputStream(),
+                    contentType,
+                    file.getOriginalFilename()
+            );
+
+            if (!isValid) {
+                log.warn("文件类型验证失败: filename={}, contentType={}", file.getOriginalFilename(), contentType);
+                throw new BusinessException(ResultCode.FILE_TYPE_NOT_SUPPORTED, "文件内容与声明的类型不匹配");
+            }
+        } catch (IOException e) {
+            log.error("读取文件内容失败", e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "文件验证失败");
         }
     }
 
