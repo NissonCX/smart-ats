@@ -436,16 +436,23 @@ try {
 在 `.env` 文件中添加：
 
 ```bash
-# OpenAI 配置（或使用其他兼容 API）
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxx
-OPENAI_API_BASE=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
+# 智谱 AI 配置（推荐用于中文简历解析）
+ZHIPU_API_KEY=xxxxxxxxxxxxx.xxxxxxxxxxxxx
+ZHIPU_API_BASE=https://open.bigmodel.cn/api/paas/v4
+ZHIPU_MODEL=glm-4-flash
 
-# 或使用国内 API（如通义千问）
-# OPENAI_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
-# OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxx
-# OPENAI_MODEL=qwen-plus
+# 模型说明：
+# - glm-4-flash：速度快、价格低，适合开发测试（¥0.1/百万 tokens）
+# - glm-4-air：性价比高，适合生产环境（¥0.5/百万 tokens）
+# - glm-4：能力最强，适合复杂任务（¥1.0/百万 tokens）
 ```
+
+**获取智谱 API Key**：
+1. 访问 [智谱 AI 开放平台](https://open.bigmodel.cn/)
+2. 注册并实名认证
+3. 在「API Key」页面创建新密钥
+
+**详细配置说明**：请参考 `docs/zhipu-ai-integration-guide.md`
 
 #### 步骤 1.3：创建数据库表
 
@@ -1093,7 +1100,7 @@ public class CandidateInfo {
 }
 ```
 
-### 示例 4：Spring AI 配置
+### 示例 4：Spring AI 配置（智谱 AI）
 
 ```java
 package com.smartats.config;
@@ -1105,15 +1112,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.time.Duration;
-
 /**
- * Spring AI 配置
+ * Spring AI 配置（智谱 AI）
  * <p>
+ * 说明：智谱 AI 兼容 OpenAI API 格式
  * 功能：
- * 1. 配置 OpenAI API 密钥和基础 URL
- * 2. 设置超时时间和重试策略
- * 3. 支持切换不同的 AI 提供商
+ * 1. 配置智谱 API 密钥和基础 URL
+ * 2. 设置超时时间和温度参数
+ * 3. 支持不同模型切换（GLM-4-Flash/Air/Plus）
  */
 @Configuration
 public class SpringAIConfig {
@@ -1121,37 +1127,65 @@ public class SpringAIConfig {
     @Value("${spring.ai.openai.api-key}")
     private String apiKey;
 
-    @Value("${spring.ai.openai.base-url:https://api.openai.com/v1}")
+    @Value("${spring.ai.openai.base-url:https://open.bigmodel.cn/api/paas/v4}")
     private String baseUrl;
 
-    @Value("${spring.ai.openai.chat.options.model:gpt-4o-mini}")
+    @Value("${spring.ai.openai.chat.options.model:glm-4-flash}")
     private String model;
 
-    @Value("${spring.ai.openai.chat.options.temperature:0.7}")
+    @Value("${spring.ai.openai.chat.options.temperature:0.3}")
     private Double temperature;
 
     /**
-     * 创建 OpenAI Chat Model
+     * 创建智谱 AI Chat Model
      * <p>
-     * 为什么使用 OpenAiChatModel 而不是 ChatClient：
+     * 为什么使用 OpenAiChatModel：
+     * - 智谱 AI 兼容 OpenAI API 格式
      * - 更细粒度的控制
-     * - 支持结构化输出
-     * - 更容易测试
+     * - 支持结构化输出（BeanOutputConverter）
      */
     @Bean
     public OpenAiChatModel openAiChatModel() {
         OpenAiApi openAiApi = new OpenAiApi(baseUrl, apiKey);
 
         OpenAiChatOptions options = OpenAiChatOptions.builder()
-                .withModel(model)
-                .withTemperature(temperature)
-                .withMaxTokens(4000)  // 根据模型调整
+                .withModel(model)           // glm-4-flash / glm-4-air / glm-4
+                .withTemperature(temperature)  // 0.3（较低温度，更确定的输出）
+                .withMaxTokens(4000)        // 最大输出长度
                 .build();
 
         return new OpenAiChatModel(openAiApi, options);
     }
 }
 ```
+
+**application.yml 配置**：
+
+```yaml
+spring:
+  ai:
+    openai:
+      # 智谱 API Key（从环境变量读取）
+      api-key: ${ZHIPU_API_KEY}
+      # 智谱 API 地址
+      base-url: ${ZHIPU_API_BASE:https://open.bigmodel.cn/api/paas/v4}
+      chat:
+        options:
+          # 模型选择
+          model: ${ZHIPU_MODEL:glm-4-flash}
+          # 温度（0-1，简历解析建议使用 0.3 获得更确定的输出）
+          temperature: 0.3
+          # 最大 token 数
+          max-tokens: 4000
+```
+
+**为什么使用智谱 AI**：
+- ✅ 国内访问稳定，无需代理
+- ✅ 中文理解能力强，专门针对中文优化
+- ✅ 价格更便宜（GLM-4-Flash 仅 ¥0.1/百万 tokens）
+- ✅ 兼容 OpenAI API 格式，代码无需大改
+
+**详细配置说明**：请参考 `docs/zhipu-ai-integration-guide.md`
 
 ### 示例 5：文件内容提取服务
 
@@ -1287,20 +1321,18 @@ public class ResumeContentExtractor {
 }
 ```
 
-### 示例 6：AI 解析服务
+### 示例 6：AI 解析服务（智谱 AI + 中文简历优化）
 
 ```java
 package com.smartats.module.resume.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.exception.BusinessException;
+import com.smartats.common.result.ResultCode;
 import com.smartats.module.resume.dto.CandidateInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.ChatClient;
 import org.springframework.ai.chat.ChatResponse;
-import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
@@ -1308,11 +1340,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * AI 简历解析服务
+ * AI 简历解析服务（智谱 AI）
  * <p>
  * 功能：
  * 1. 接收纯文本简历内容
- * 2. 构建 Prompt 让 LLM 提取结构化信息
+ * 2. 构建 Prompt（针对中文简历优化）让 LLM 提取结构化信息
  * 3. 使用 BeanOutputConverter 确保返回符合格式的 JSON
  * 4. 返回 CandidateInfo 对象
  */
@@ -1322,9 +1354,8 @@ import org.springframework.stereotype.Service;
 public class ResumeParseService {
 
     private final ChatClient chatClient;
-    private final ObjectMapper objectMapper;
 
-    @Value("${smartats.ai.model:gpt-4o-mini}")
+    @Value("${spring.ai.openai.chat.options.model:glm-4-flash}")
     private String model;
 
     /**
@@ -1334,109 +1365,152 @@ public class ResumeParseService {
      * @return 结构化的候选人信息
      */
     public CandidateInfo parseResume(String resumeContent) {
-        log.info("开始 AI 解析简历: contentLength={}", resumeContent.length());
+        log.info("开始使用智谱 AI 解析简历: model={}, contentLength={}", model, resumeContent.length());
 
         try {
             // 1. 创建结构化输出转换器
             BeanOutputConverter<CandidateInfo> converter =
                     new BeanOutputConverter<>(CandidateInfo.class);
 
-            // 2. 获取 JSON 格式说明（告诉 LLM 返回什么格式）
+            // 2. 获取 JSON 格式说明
             String formatInstructions = converter.getFormat();
 
-            // 3. 构建 Prompt
-            String prompt = buildPrompt(resumeContent, formatInstructions);
+            // 3. 构建 Prompt（针对中文简历优化）
+            String prompt = buildPromptForChineseResume(resumeContent, formatInstructions);
 
-            // 4. 调用 LLM
-            log.debug("发送请求到 LLM: model={}", model);
+            // 4. 调用智谱 AI
+            log.debug("发送请求到智谱 AI: model={}", model);
 
             Prompt aiPrompt = new Prompt(new UserMessage(prompt));
             ChatResponse response = chatClient.call(aiPrompt);
 
             String responseContent = response.getResult().getOutput().getContent();
-            log.debug("LLM 响应: responseLength={}", responseContent.length());
+            log.debug("智谱 AI 响应: responseLength={}", responseContent.length());
 
             // 5. 解析响应
             CandidateInfo candidateInfo = converter.convert(responseContent);
 
-            log.info("AI 解析成功: name={}, phone={}, email={}",
+            log.info("智谱 AI 解析成功: name={}, phone={}, email={}",
                     candidateInfo.getName(), candidateInfo.getPhone(), candidateInfo.getEmail());
 
             return candidateInfo;
 
         } catch (Exception e) {
-            log.error("AI 解析失败", e);
+            log.error("智谱 AI 解析失败", e);
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "简历解析失败: " + e.getMessage());
         }
     }
 
     /**
-     * 构建 Prompt
+     * 构建针对中文简历优化的 Prompt
      * <p>
-     * Prompt 设计要点：
-     * 1. 明确角色定位（专业简历提取助手）
-     * 2. 详细列出需要提取的字段
-     * 3. 提供格式说明（JSON Schema）
-     * 4. 给出注意事项和示例
-     * 5. 限制输出格式（只返回 JSON）
+     * 优化点：
+     * 1. 使用中文描述，智谱 AI 对中文理解更好
+     * 2. 针对中文简历格式调整字段说明
+     * 3. 添加中文简历常见格式转换规则
+     * 4. 提供更详细的提取示例
      */
-    private String buildPrompt(String resumeContent, String formatInstructions) {
+    private String buildPromptForChineseResume(String resumeContent, String formatInstructions) {
         return String.format("""
-                你是一个专业的简历信息提取助手。请从以下简历内容中提取结构化信息，并以 JSON 格式返回。
+                你是一个专业的简历信息提取助手。请从以下中文简历内容中提取结构化信息，并以 JSON 格式返回。
 
                 ## 提取字段说明
 
                 ### 基本信息
                 - name: 姓名
-                - phone: 手机号（11位数字）
-                - email: 邮箱地址
+                - phone: 手机号（11位数字，如：13800138000）
+                - email: 邮箱地址（如：zhangsan@example.com）
                 - gender: 性别（男/女，如果无法判断返回 null）
                 - age: 年龄（整数）
 
                 ### 教育信息
-                - education: 学历（高中/专科/本科/硕士/博士）
+                - education: 学历（高中/专科/本科/硕士研究生/博士研究生/MBA）
                 - school: 毕业院校全称
                 - major: 专业名称
-                - graduationYear: 毕业年份（4位整数）
+                - graduationYear: 毕业年份（4位整数，如：2020）
 
                 ### 工作信息
-                - workYears: 工作年限（整数年）
-                - currentCompany: 当前公司名称（最近一家）
-                - currentPosition: 当前职位名称
+                - workYears: 工作年限（整数年，如：3）
+                - currentCompany: 当前或最近一家公司名称
+                - currentPosition: 当前或最近职位名称
 
                 ### 技能与经历
-                - skills: 技能列表（字符串数组，提取关键词如 Java、Spring、MySQL 等）
+                - skills: 技能列表（字符串数组，提取核心技能，如：["Java", "Spring Boot", "MySQL", "Redis"]）
                 - workExperience: 工作经历数组，每项包含：
                   * company: 公司名称
                   * position: 职位名称
-                  * startDate: 开始时间（格式：yyyy-MM）
-                  * endDate: 结束时间（格式：yyyy-MM，至今用 "至今"）
-                  * description: 工作职责描述
+                  * startDate: 开始时间（格式：yyyy-MM 或 yyyy年MM月）
+                  * endDate: 结束时间（格式：yyyy-MM 或 "至今"）
+                  * description: 工作职责和成就描述
+
                 - projectExperience: 项目经历数组，每项包含：
                   * name: 项目名称
                   * role: 担任角色
                   * startDate: 开始时间（yyyy-MM）
                   * endDate: 结束时间（yyyy-MM）
-                  * description: 项目描述
+                  * description: 项目描述和职责
                   * technologies: 使用的技术栈（字符串数组）
 
-                ### 其他
                 - selfEvaluation: 自我评价（原文提取）
 
                 ## 注意事项
 
                 1. 如果某个字段无法从简历中提取，使用 null 而不是猜测
-                2. 日期格式统一为 yyyy-MM 或 yyyy-MM-dd
-                3. 技能列表只保留核心技术，不要包含办公软件等通用技能
+                2. 日期格式统一为 yyyy-MM，如果写"2020年1月"，转换为"2020-01"
+                3. 技能列表只保留核心技术技能，不要包含"办公软件"、"英语"等通用技能
                 4. 工作经历和项目经历按时间倒序排列（最新的在前）
-                5. 只返回 JSON，不要包含任何其他文字说明
+                5. 公司名称和项目名称保留完整，不要缩写
+                6. 职位名称使用标准称呼，如"后端开发工程师"而不是"后端"
+                7. 只返回 JSON 数据，不要包含任何其他文字说明、markdown 代码块标记
 
-                ## 输出格式
+                ## 日期格式转换规则
+
+                - "2020年1月" → "2020-01"
+                - "2020.01" → "2020-01"
+                - "2020/01" → "2020-01"
+                - "2020年01月至今" → endDate 为 "至今"
+                - "2020年至今" → "2020-01"，endDate 为 "至今"
+
+                ## 学历标准化
+
+                - "大学本科"、"本科"、"学士" → "本科"
+                - "硕士研究生"、"硕士"、"研究生硕士" → "硕士研究生"
+                - "博士研究生"、"博士" → "博士研究生"
+
+                ## 职位标准化
+
+                - "Java开发"、"Java工程师" → "Java开发工程师"
+                - "后端"、"后端开发" → "后端开发工程师"
+
+                ## 输出格式要求
 
                 %s
 
                 ## 简历内容
 
+                %s
+
+                请严格按照上述格式提取并返回 JSON：
+                """,
+                formatInstructions,
+                resumeContent
+        );
+    }
+}
+```
+
+**关键优化点**：
+
+1. **中文 Prompt**：智谱 AI 对中文理解更好，使用中文 Prompt 提高准确率
+2. **日期格式转换**：针对中文简历常见的 `2020年1月` 格式添加转换规则
+3. **学历标准化**：统一各种学历表达方式
+4. **职位标准化**：将简写转换为标准称呼
+5. **格式约束**：明确要求不包含 markdown 代码块标记
+
+**为什么这样优化**：
+- 中文简历格式多样，需要明确转换规则
+- 智谱 GLM 模型针对中文优化，中文 Prompt 效果更好
+- 减少后处理工作，让 AI 直接返回标准格式
                 %s
 
                 请提取并返回 JSON：
