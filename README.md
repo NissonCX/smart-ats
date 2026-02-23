@@ -6,16 +6,19 @@
 
 ## 项目简介
 
-**SmartATS**（Smart Applicant Tracking System）是一套面向 HR 的智能招聘管理系统，核心链路分为四条：
+**SmartATS**（Smart Applicant Tracking System）是一套面向 HR 的智能招聘管理系统，覆盖从简历上传、AI 解析到面试管理的完整招聘流程。
 
 | 链路 | 功能描述 | 状态 |
 |------|---------|------|
-| **登录链路** | 注册 / 登录 / JWT 鉴权，三种角色（ADMIN / HR / INTERVIEWER） | ✅ 95% |
-| **上传链路** | 批量上传简历 → MD5 去重 → MinIO 存储 → MQ 异步解析 → AI 结构化提取 | ✅ 85% |
-| **检索链路** | 关键词筛选 + RAG 语义搜索（向量相似度 + LLM 重排）候选人 | ⏳ 60% |
-| **招聘流程链路** | 职位管理 → 简历投递 → 面试安排 → 面试反馈 | ⏳ 50% |
+| **认证链路** | 注册 / 登录 / JWT 鉴权，角色：ADMIN / HR / INTERVIEWER | ✅ 98% |
+| **上传链路** | 上传简历 → MD5 去重 → MinIO 存储 → MQ 异步 → AI 结构化提取 | ✅ 95% |
+| **招聘流程链路** | 职位管理 → 候选人 → 投递申请 → 面试安排 → 面试反馈 | ✅ 95% |
+| **Webhook 链路** | 事件触发 → 签名 → 异步发送 → 重试 → 日志记录 | ✅ 95% |
+| **检索链路** | 关键词筛选 + RAG 语义搜索（候选人向量检索） | ⏳ 待实现 |
 
-**整体完成度**: ~80%
+**整体完成度**: ~92%（核心功能）  
+**总 API 端点数**: 37 个  
+**Java 源文件数**: 84 个
 
 ---
 
@@ -24,18 +27,18 @@
 | 层次 | 技术 | 版本 | 用途 | 状态 |
 |------|------|------|------|------|
 | 核心框架 | Spring Boot | 3.2.5 | 基础框架 | ✅ |
-| 运行时 | JDK | 21 | Java 运行环境 | ✅ 必需 |
+| 运行时 | JDK | 21 | Java 运行环境 | ✅ |
 | ORM | MyBatis-Plus | 3.5.10.1 | 数据库操作（LambdaQueryWrapper） | ✅ |
 | 数据库 | MySQL | 8.0 | 业务数据持久化，含全文索引 | ✅ |
-| 缓存 / 锁 | Redis | 7.0 | 缓存、分布式去重、原子计数 | ✅ |
+| 缓存 | Redis | 7.0 | 缓存、分布式去重、原子计数 | ✅ |
 | 分布式锁 | Redisson | 3.25.0 | Watchdog 自动续期分布式锁 | ✅ |
 | 消息队列 | RabbitMQ | 3.12 | 简历解析任务异步解耦、死信补偿 | ✅ |
 | 对象存储 | MinIO | 8.5.10 | 简历文件存储 | ✅ |
-| AI 集成 | Spring AI | 1.0.0-M4 | 智谱AI 调用 + Embedding | ✅ |
+| AI 集成 | Spring AI | 1.0.0-M4 | 智谱AI 调用（OpenAI 兼容模式） | ✅ |
 | 文档处理 | Apache POI / PDFBox | 5.2.5 / 2.0.29 | DOC/DOCX/PDF 内容提取 | ✅ |
 | 认证 | Spring Security + JWT | - | 接口鉴权、BCrypt 密码加密 | ✅ |
 | 邮件 | Spring Mail | - | HTML 验证码邮件（QQ SMTP） | ✅ |
-| JSON 工具 | Fastjson2 | 2.0.43 | 序列化 | ✅ |
+| JSON | Fastjson2 | 2.0.43 | 序列化 | ✅ |
 | 工具库 | Hutool | 5.8.23 | 加密、时间、字符串 | ✅ |
 
 ---
@@ -43,37 +46,35 @@
 ## 系统架构
 
 ```
-┌──────────┐     ┌────────────────────────────────────────────────────────────┐
-│ HR Client│────▶│  API 层：Spring Security JWT 过滤器                         │
-└──────────┘     └──────────────────────────┬───────────────────────────────┘
+┌──────────┐     ┌─────────────────────────────────────────────────────────────┐
+│ HR Client│────▶│  API 层：Spring Security JWT 过滤器                          │
+└──────────┘     └──────────────────────────┬──────────────────────────────────┘
                                             │
-        ┌───────────────────────────────────┼──────────────────────────────┐
-        ▼                                   ▼                              ▼
-┌──────────────┐                   ┌──────────────────┐           ┌──────────────┐
-│   认证模块    │                   │    简历模块        │           │   职位模块   │
-│  注册 登录    │                   │  批量上传/去重     │           │  CRUD + 缓存 │
-│  JWT 工具    │                   │  MD5 → MinIO      │           │  热榜 ZSet   │
-│  JWT 过滤器  │                   │  状态轮询          │           └──────────────┘
-└──────────────┘                   └────────┬──────────┘
-                                            │ 发 MQ 消息
-                                            ▼
-                                   ┌──────────────────┐
-                                   │    RabbitMQ       │
-                                   │  resume.parse     │
-                                   │  .queue           │
-                                   │  DLX → DLQ 死信   │
-                                   └────────┬──────────┘
-                                            │ 消费
-                                            ▼
-                                   ┌────────────────────────┐
-                                   │  解析消费者              │
-                                   │  1. 幂等检查            │
-                                   │  2. Redisson 分布式锁   │
-                                   │  3. 文件内容提取        │
-                                   │  4. AI 结构化提取       │
-                                   │  5. 写 MySQL candidates │
-                                   │  6. Webhook 通知        │
-                                   └────────────────────────┘
+    ┌──────────────┬──────────────┬─────────┼──────────┬──────────────┬──────────────┐
+    ▼              ▼              ▼         ▼          ▼              ▼              ▼
+┌────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐
+│ 认证   │  │ 职位管理 │  │ 简历上传 │  │ 候选人 │  │ 职位申请 │  │ 面试记录 │  │Webhook │
+│ 模块   │  │ 模块     │  │ 模块     │  │ 模块   │  │ 模块     │  │ 模块     │  │ 模块   │
+└────────┘  └──────────┘  └────┬─────┘  └────────┘  └──────────┘  └──────────┘  └────────┘
+                               │ 发 MQ 消息
+                               ▼
+                      ┌──────────────────┐
+                      │    RabbitMQ      │
+                      │  resume.parse    │
+                      │  .queue          │
+                      │  DLX → DLQ 死信  │
+                      └────────┬─────────┘
+                               │ 消费
+                               ▼
+                      ┌────────────────────────┐
+                      │  解析消费者              │
+                      │  1. 幂等检查            │
+                      │  2. Redisson 分布式锁   │
+                      │  3. 文件内容提取        │
+                      │  4. AI 结构化提取       │
+                      │  5. 写 MySQL candidates │
+                      │  6. Webhook 通知        │
+                      └────────────────────────┘
 ```
 
 ---
@@ -166,11 +167,11 @@ users ──┐
 
 | 表名 | 用途 | 关键字段 |
 |------|------|---------|
-| `users` | 账号体系 | `role`（ADMIN/HR/INTERVIEWER），`daily_ai_quota` 每日 AI 配额 |
+| `users` | 账号体系 | `role`（ADMIN/HR/INTERVIEWER），`daily_ai_quota` AI 配额 |
 | `jobs` | 职位信息 | `status`（DRAFT/PUBLISHED/CLOSED），`required_skills` JSON |
 | `resumes` | 简历文件 | `file_hash` MD5 唯一索引，`status` 状态流转 |
 | `candidates` | AI 提取结构化数据 | `skills` JSON，`work_experiences` JSON，`raw_json` |
-| `job_applications` | 投递记录 | `match_score` AI 匹配分 |
+| `job_applications` | 投递记录 | `status` 状态流转，`match_score` AI 匹配分 |
 | `interview_records` | 面试记录 | `round` 轮次，`recommendation` 推荐级别 |
 | `webhook_configs` | Webhook 配置 | `event_types` JSON，`secret` 签名密钥 |
 | `webhook_logs` | Webhook 日志 | `status`，`response_body` |
@@ -196,19 +197,20 @@ Authorization: Bearer <accessToken>
 }
 ```
 
-### 认证模块 `/auth`
+### 认证模块 `/auth`（5 个端点）
 
-| 方法 | 路径 | 说明 | 需要 Token |
-|------|------|------|:---------:|
-| POST | `/auth/register` | 用户注册（BCrypt 密码加密） | ❌ |
-| POST | `/auth/login` | 登录，返回 accessToken（2h）+ refreshToken（7d） | ❌ |
-| POST | `/auth/send-verification-code` | 发送邮箱验证码（HTML 模板，5 分钟有效） | ❌ |
+| 方法 | 路径 | 说明 | Token |
+|------|------|------|:-----:|
+| POST | `/auth/register` | 用户注册（BCrypt 加密，禁止自注册 ADMIN） | ❌ |
+| POST | `/auth/login` | 登录（accessToken 2h + refreshToken 7d） | ❌ |
+| POST | `/auth/send-verification-code` | 发送邮箱验证码（5 分钟有效） | ❌ |
+| POST | `/auth/refresh` | 刷新 Token | ❌ |
 | GET | `/auth/test` | 测试认证状态 | ✅ |
 
-### 职位模块 `/jobs`
+### 职位模块 `/jobs`（8 个端点）
 
-| 方法 | 路径 | 说明 | 需要 Token |
-|------|------|------|:---------:|
+| 方法 | 路径 | 说明 | Token |
+|------|------|------|:-----:|
 | POST | `/jobs` | 创建职位 | ✅ |
 | PUT | `/jobs` | 更新职位 | ✅ |
 | GET | `/jobs/{id}` | 获取职位详情（Redis 缓存） | ❌ |
@@ -216,33 +218,56 @@ Authorization: Bearer <accessToken>
 | POST | `/jobs/{id}/publish` | 发布职位 | ✅ |
 | POST | `/jobs/{id}/close` | 关闭职位 | ✅ |
 | DELETE | `/jobs/{id}` | 删除职位 | ✅ |
-| GET | `/jobs/hot` | 获取热门职位排行（Redis ZSet） | ❌ |
+| GET | `/jobs/hot` | 热门职位排行（Redis ZSet） | ❌ |
 
-### 简历模块 `/resumes`
+### 简历模块 `/resumes`（4 个端点）
 
-| 方法 | 路径 | 说明 | 需要 Token |
-|------|------|------|:---------:|
+| 方法 | 路径 | 说明 | Token |
+|------|------|------|:-----:|
 | POST | `/resumes/upload` | 单文件上传（PDF/DOC/DOCX，≤ 10MB） | ✅ |
 | GET | `/resumes/tasks/{taskId}` | 查询解析任务状态 | ✅ |
 | GET | `/resumes/{id}` | 获取简历详情 | ✅ |
 | GET | `/resumes` | 分页查询简历列表 | ✅ |
 
-### 候选人模块 `/candidates`
+### 候选人模块 `/candidates`（5 个端点）
 
-| 方法 | 路径 | 说明 | 需要 Token |
-|------|------|------|:---------:|
-| GET | `/candidates/{id}` | 获取候选人详情 | ✅ |
-| GET | `/candidates` | 分页查询候选人（关键字搜索） | ✅ |
+| 方法 | 路径 | 说明 | Token |
+|------|------|------|:-----:|
+| GET | `/candidates/resume/{resumeId}` | 按简历 ID 查询候选人 | ✅ |
+| GET | `/candidates/{id}` | 获取候选人详情（Redis 缓存） | ✅ |
 | PUT | `/candidates/{id}` | 更新候选人信息 | ✅ |
 | DELETE | `/candidates/{id}` | 删除候选人 | ✅ |
+| GET | `/candidates` | 分页查询（多维筛选 + 脱敏） | ✅ |
 
-### Webhook 模块 `/webhooks`
+### 职位申请模块 `/applications`（6 个端点）
 
-| 方法 | 路径 | 说明 | 需要 Token |
-|------|------|------|:---------:|
+| 方法 | 路径 | 说明 | Token |
+|------|------|------|:-----:|
+| POST | `/applications` | 创建申请（防重复提交） | ✅ |
+| PUT | `/applications/{id}/status` | 更新申请状态 | ✅ |
+| GET | `/applications/{id}` | 获取申请详情 | ✅ |
+| GET | `/applications/job/{jobId}` | 某职位的申请列表 | ✅ |
+| GET | `/applications/candidate/{candidateId}` | 某候选人的申请列表 | ✅ |
+| GET | `/applications` | 分页查询 | ✅ |
+
+### 面试模块 `/interviews`（5 个端点）
+
+| 方法 | 路径 | 说明 | Token |
+|------|------|------|:-----:|
+| POST | `/interviews` | 安排面试 | ✅ |
+| PUT | `/interviews/{id}/feedback` | 提交面试反馈 | ✅ |
+| POST | `/interviews/{id}/cancel` | 取消面试 | ✅ |
+| GET | `/interviews/{id}` | 获取面试详情 | ✅ |
+| GET | `/interviews/application/{appId}` | 某申请的所有面试轮次 | ✅ |
+
+### Webhook 模块 `/webhooks`（4 个端点）
+
+| 方法 | 路径 | 说明 | Token |
+|------|------|------|:-----:|
 | POST | `/webhooks` | 创建 Webhook 配置 | ✅ |
 | GET | `/webhooks` | 查询 Webhook 列表 | ✅ |
 | DELETE | `/webhooks/{id}` | 删除 Webhook 配置 | ✅ |
+| POST | `/webhooks/{id}/test` | 测试 Webhook | ✅ |
 
 ---
 
@@ -252,17 +277,22 @@ Authorization: Bearer <accessToken>
 
 | Key 模式 | 类型 | 用途 | TTL |
 |----------|------|------|-----|
-| `jwt:token:{userId}` | String | Access Token（验证） | 2h |
+| `jwt:token:{userId}` | String | Access Token | 2h |
 | `jwt:refresh:{userId}` | String | Refresh Token | 7d |
 | `verification_code:{email}` | String | 邮箱验证码 | 5min |
 | `verification_code-limit:{email}` | String | 验证码发送频率限制 | 60s |
-| `task:resume:{taskId}` | Hash | 解析任务状态 | 24h |
+| `task:resume:{taskId}` | String | 解析任务状态 | 24h |
 | `idempotent:resume:{resumeId}` | String | 幂等性检查 | 1h |
 | `dedup:resume:{fileHash}` | String | 文件 MD5 去重标记 | 7d |
-| `lock:resume:{fileHash}` | String | 解析分布式锁 | 自动释放 |
+| `lock:resume:{fileHash}` | String | Redisson 分布式锁 | 自动释放 |
 | `cache:job:{jobId}` | String | 职位详情缓存 | 30min |
 | `cache:job:hot` | ZSet | 热门职位排行 | 10min |
 | `counter:job:view:{jobId}` | String | 原子浏览计数器 | 持久化 |
+| `cache:candidate:{candidateId}` | String | 候选人缓存 | 30min |
+| `cache:application:{applicationId}` | String | 申请缓存 | 30min |
+| `cache:interview:{interviewId}` | String | 面试缓存 | 30min |
+
+所有 Key 前缀统一在 `RedisKeyConstants.java` 中管理。
 
 ---
 
@@ -287,7 +317,8 @@ Producer
          │    7. Webhook 通知
          │    8. 更新状态 COMPLETED → ACK
          │
-         │  处理异常 → NACK → 死信
+         │  处理异常 → republish(retryCount+1) → ACK 原消息
+         │  超过 3 次 → NACK → 死信
          ▼
        smartats.dlx → resume.parse.dlq（死信队列）
 ```
@@ -296,7 +327,7 @@ Producer
 
 ## AI 集成
 
-### 智谱AI配置
+### 智谱AI 配置
 
 项目使用 Spring AI 集成智谱AI，完全兼容 OpenAI 格式：
 
@@ -317,10 +348,11 @@ spring:
 ### 简历解析流程
 
 1. 文件上传到 MinIO
-2. 消费者从 MinIO 下载文件
+2. Consumer 从 MinIO 下载文件
 3. 使用 POI/PDFBox 提取文本内容
-4. 调用智谱AI解析，输出结构化JSON
+4. 调用智谱AI 解析，输出结构化 JSON
 5. 保存到 candidates 表
+6. 触发 Webhook 通知
 
 ---
 
@@ -329,11 +361,11 @@ spring:
 ### 数据库操作
 
 ```java
-// ✅ 正确：LambdaQueryWrapper（类型安全，重构友好）
+// ✅ 正确：LambdaQueryWrapper（类型安全）
 userMapper.selectOne(new LambdaQueryWrapper<User>()
     .eq(User::getUsername, username));
 
-// ❌ 错误：字符串形式（运行时才报错，重构不友好）
+// ❌ 错误：字符串形式
 userMapper.selectOne(new QueryWrapper<User>().eq("username", username));
 ```
 
@@ -342,7 +374,8 @@ userMapper.selectOne(new QueryWrapper<User>().eq("username", username));
 - 业务异常统一抛出 `BusinessException(ResultCode.xxx)`
 - 密码必须 BCrypt 加密，响应中**禁止**返回密码字段
 - 多步数据库操作使用 `@Transactional(rollbackFor = Exception.class)`
-- **写操作后删除缓存**（而非更新），防止脏读
+- 写操作后**删除缓存**（延迟双删），而非更新缓存
+- Redis 统一使用 `StringRedisTemplate` + `ObjectMapper` 手动序列化
 
 ### 日志规范
 
@@ -360,70 +393,62 @@ userMapper.selectOne(new QueryWrapper<User>().eq("username", username));
 ```
 src/main/java/com/smartats/
 ├── SmartAtsApplication.java                # 启动类
-├── common/                                 # 公共组件
-│   ├── constants/                          # 常量定义
-│   ├── exception/                          # BusinessException、GlobalExceptionHandler
-│   ├── result/                             # Result<T> 统一响应、ResultCode 错误码
-│   └── util/                               # FileValidationUtil 等工具类
-├── config/                                 # 配置类
-│   ├── SecurityConfig.java                 # Spring Security + CORS
-│   ├── RabbitMQConfig.java                 # Exchange、Queue、DLQ
+├── common/                                 # 公共组件（8 文件）
+│   ├── constants/RedisKeyConstants.java    # Redis Key 统一管理
+│   ├── exception/                          # BusinessException + GlobalExceptionHandler
+│   ├── handler/JsonTypeHandler.java        # MyBatis JSON 类型处理器
+│   ├── result/                             # Result<T> + ResultCode
+│   └── util/                               # FileValidationUtil + DataMaskUtil
+├── config/                                 # 配置类（6 文件）
+│   ├── SecurityConfig.java                 # Spring Security + CORS + JWT
+│   ├── RabbitMQConfig.java                 # Exchange, Queue, DLQ
 │   ├── MinioConfig.java                    # MinIO 客户端
+│   ├── AsyncConfig.java                    # @Async 线程池
 │   ├── RedissonConfig.java                 # Redisson 分布式锁
-│   └── ZhipuAiConfig.java                  # 智谱 AI 配置
-├── infrastructure/                         # 基础设施服务
-│   ├── email/                              # EmailService
-│   ├── mq/                                 # MessagePublisher
-│   └── storage/                            # MinioFileStorageService
-└── module/                                 # 业务模块
-    ├── auth/                               # ✅ 认证模块 (95%)
-    ├── job/                                # ✅ 职位管理 (90%)
-    ├── resume/                             # ✅ 简历上传 (85%)
-    │   └── consumer/                       # ResumeParseConsumer 消费者
-    ├── candidate/                          # ⏳ 候选人模块 (60%)
-    ├── webhook/                            # ⏳ Webhook (70%)
-    └── interview/                          # ❌ 面试模块 (0%)
+│   └── ZhipuAiConfig.java                  # 智谱 AI（OpenAI 兼容）
+├── infrastructure/                         # 基础设施（4 文件）
+│   ├── email/EmailService.java             # 邮件发送
+│   ├── mq/MessagePublisher.java            # RabbitMQ 消息发布
+│   └── storage/                            # FileStorageService + MinIO 实现
+└── module/                                 # 业务模块（7 个，65 文件）
+    ├── auth/                               # ✅ 认证（12 文件）
+    ├── job/                                # ✅ 职位管理（10 文件）
+    ├── resume/                             # ✅ 简历上传 + AI 解析（11 文件）
+    ├── candidate/                          # ✅ 候选人（7 文件）
+    ├── application/                        # ✅ 职位申请（8 文件）
+    ├── interview/                          # ✅ 面试记录（7 文件）
+    └── webhook/                            # ✅ Webhook（10 文件）
 ```
 
 ---
 
 ## 项目进度
 
-### 当前状态（2026-02-20）
+### 当前状态（2026-02-23）
 
 | 模块 | 完成度 | 状态 |
 |------|--------|------|
-| 项目骨架（统一响应 / 全局异常） | 100% | ✅ 完成 |
-| Spring Security 配置 | 100% | ✅ 完成 |
-| 认证模块（注册 / 登录 / JWT） | 95% | ✅ 完成 |
-| 职位管理模块（CRUD / 缓存 / 热榜） | 90% | ✅ 完成 |
-| 简历上传模块（上传 / 去重 / MQ） | 85% | ✅ 完成 |
-| AI 解析（智谱AI集成） | 80% | ✅ 完成 |
-| Webhook 模块 | 70% | ⏳ 部分完成 |
-| 候选人模块 | 60% | ⏳ 部分完成 |
-| 面试模块 | 0% | ❌ 未开始 |
-| 单元测试覆盖 | 5% | ⚠️ 严重不足 |
+| 公共组件（统一响应 / 异常 / 工具） | 100% | ✅ |
+| Spring Security + 配置 | 100% | ✅ |
+| 认证模块（注册 / 登录 / JWT / 刷新） | 98% | ✅ |
+| 职位管理（CRUD / 缓存 / 热榜） | 95% | ✅ |
+| 简历上传（上传 / 去重 / AI 解析） | 95% | ✅ |
+| 候选人模块（筛选 / 缓存 / 脱敏） | 95% | ✅ |
+| 职位申请（创建 / 状态流转 / 查询） | 95% | ✅ |
+| 面试记录（安排 / 反馈 / 取消） | 95% | ✅ |
+| Webhook（创建 / 测试 / 13 种事件） | 95% | ✅ |
+| 单元测试 | 5% | ⚠️ 不足 |
+| 向量搜索 / RAG | 0% | ❌ 未开始 |
 
 ### 下一步计划
 
 | 优先级 | 任务 | 预计时间 |
 |--------|------|----------|
-| 🔴 高 | 补充单元测试 | 1-2周 |
-| 🟡 中 | 完善候选人高级搜索 | 3-5天 |
-| 🟡 中 | 完善Webhook测试接口 | 1天 |
-| 🟢 低 | 实现面试模块 | 2周 |
-| 🟢 低 | 向量数据库集成 | 2-3周 |
-
----
-
-## 已知问题
-
-| 优先级 | 问题 | 说明 |
-|--------|------|------|
-| 🔴 高 | 测试覆盖率为0 | 核心业务逻辑无测试 |
-| 🟡 中 | Webhook测试接口未实现 | `WebhookController.java:86` |
-| 🟡 中 | 批量上传功能缺失 | 仅有单文件上传 |
-| 🟢 低 | 面试模块未开发 | 数据库表已就绪 |
+| 🔴 高 | 补充单元测试 | 1-2 周 |
+| 🟡 中 | 批量上传功能 | 1-2 天 |
+| 🟡 中 | Swagger/OpenAPI 文档 | 0.5 天 |
+| 🟡 中 | 向量搜索 / RAG 集成 | 1 周 |
+| 🟢 低 | 环境分离配置 | 1 天 |
 
 ---
 
@@ -432,20 +457,9 @@ src/main/java/com/smartats/
 | 文档 | 说明 |
 |------|------|
 | [项目进度总结](docs/project-progress-summary.md) | 详细的模块完成情况分析 |
+| [下一步计划](docs/next-steps-plan-2026-02-23.md) | 开发优先级和技术方案 |
 | [SmartATS 设计文档](docs/SmartATS-Design-Document.md) | 完整技术规范：数据库 Schema、全量 API 定义 |
-| [从0到1开发教学手册](docs/SmartATS-从0到1开发教学手册.md) | 分阶段开发指南、新手踩坑清单 |
-| [智谱AI模型参考](docs/zhipu-models-quick-reference.md) | 智谱AI模型快速配置 |
-
----
-
-## 开发环境
-
-**IDE**: IntelliJ IDEA（推荐）
-**JDK**: 21
-**构建工具**: Maven 3.9+
-**数据库**: MySQL 8.0 + Redis 7.0
-**消息队列**: RabbitMQ 3.12
-**对象存储**: MinIO
+| [从0到1开发教学手册](docs/SmartATS-从0到1开发教学手册.md) | 分阶段开发指南 |
 
 ---
 
@@ -455,6 +469,6 @@ MIT License
 
 ---
 
-**最后更新**: 2026年2月20日
-**版本**: 1.0.0
-**项目状态**: 开发中（80%完成）
+**最后更新**: 2026年2月23日  
+**版本**: 1.0.0  
+**项目状态**: 开发中（核心功能 ~92% 完成）

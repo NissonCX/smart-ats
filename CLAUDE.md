@@ -4,78 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**SmartATS** is an intelligent recruitment management system for HR professionals. The system enables batch resume uploads, AI-powered automatic parsing of structured information, and RAG semantic talent search.
+**SmartATS** is an intelligent recruitment management system for HR professionals. The system enables resume uploads, AI-powered automatic parsing of structured information (via 智谱AI), full recruitment workflow management (applications, interviews), and Webhook event notifications.
 
-**Current State** (2026-02-20):
-- ✅ Project skeleton established (Spring Boot 3.1.6 + MyBatis-Plus 3.5.9)
-- ✅ Authentication module complete (95%) - register, login, verification code, JWT auth
-- ✅ Job management module complete (90%) - CRUD, caching, view count, hot jobs
-- ✅ Resume upload module complete (80%) - upload, deduplication, async parsing framework
-- ✅ Webhook module complete (70%) - event subscription, signature verification
-- ✅ Spring Security configured with CORS support
-- ✅ RabbitMQ integration complete (exchange, queue, DLQ, consumer)
-- ✅ MinIO file storage integrated
-- ✅ Redis integration complete (StringRedisTemplate, caching, atomic counters)
-- ✅ Global exception handling and unified response wrapper
-- ✅ Security enhancements (file validation, CORS, webhook signature)
+**Current State** (2026-02-23):
+- ✅ All 7 business modules implemented and functional
+- ✅ 37 API endpoints across auth, job, resume, candidate, application, interview, webhook
+- ✅ AI resume parsing complete (智谱AI via Spring AI OpenAI-compatible mode)
+- ✅ Async processing pipeline (RabbitMQ + Redisson distributed lock + retry + DLQ)
+- ✅ Redis caching with cache-aside pattern, delayed double-delete, atomic counters
+- ✅ Comprehensive code quality optimization (34 issues fixed: security, N+1, exceptions, MQ)
+- ✅ Spring Security with JWT + CORS + role-based access
+- ⏳ Unit test coverage ~0% (only 1 MinIO integration test exists)
+- ❌ Vector database / RAG semantic search not started
+- ❌ Swagger/OpenAPI not configured
 
-**Overall Progress: ~80%**
-
-**Completed Modules**:
-- `common/` - Unified response wrapper, global exception handler, error codes, file validation utilities
-- `module/auth/` - Complete auth module (controller, service, mapper, entity, DTOs, JWT filter, verification)
-- `module/job/` - Complete job module (CRUD, caching, view count sync, hot jobs ranking)
-- `module/resume/` - Resume upload with async processing (MQ consumer framework ready)
-- `module/webhook/` - Webhook management with event subscription
-- `infrastructure/` - Email, MQ, storage services
-
-**Partially Completed**:
-- `module/resume/consumer` - Framework ready, AI parsing logic needed
-- `module/webhook/service` - HTTP sending logic needs testing
-
-**Not Started**:
-- `module/candidate/` - Candidate management and search
-- `module/interview/` - Interview scheduling and records
-- AI integration (Spring AI for resume parsing)
-- Vector database integration (Milvus/PgVector)
-
-**Next Steps** (Priority Order):
-1. **Fix compilation error** - Add jakarta.validation dependency for @URL annotation
-2. **Implement AI resume parsing** - Integrate Spring AI, extract structured candidate data
-3. **Implement Redisson distributed lock** - Replace TODO in ResumeParseConsumer
-4. **Complete Webhook test function** - Implement test endpoint in WebhookController
-5. **Add unit tests** - Critical business logic needs test coverage
-6. **Implement Candidate module** - Display AI-extracted structured data
-7. **Configure environment separation** - Dev/staging/prod configuration
-
-**Recent Session Summaries**:
-- `SESSION-2026-02-14.md` - Initial setup, MyBatis-Plus integration, auth module structure
-- `SESSION-2026-02-15.md` - UserService implementation, ResultCode enhancement, BusinessException optimization
-- `2026-02-20` - Security fixes (CORS, file validation), Webhook module implementation
-
-**Reference Documentation**:
-- `docs/SmartATS-Design-Document.md` - Complete technical specification, database schema, API definitions
-- `docs/SmartATS-从0到1开发教学手册.md` - Step-by-step development tutorial
-- `docs/webhook-usage.md` - Webhook functionality guide
-- `docs/security-fixes-summary.md` - Security fixes and enhancements summary
-- `docs/project-progress-2026-02-20.md` - Current project progress report (NEW)
-- `docs/next-development-plan.md` - Next development plan (NEW)
+**Overall Progress: ~92%** (core business logic)
 
 ## Technology Stack
 
 | Component | Technology | Version | Status |
 |-----------|-----------|---------|--------|
-| Core Framework | Spring Boot | 3.1.6 | ✅ |
-| ORM | MyBatis-Plus | 3.5.9 | ✅ |
+| Core Framework | Spring Boot | 3.2.5 | ✅ |
+| Runtime | JDK | 21 | ✅ Required |
+| ORM | MyBatis-Plus | 3.5.10.1 | ✅ |
 | Database | MySQL | 8.0 | ✅ |
 | Cache | Redis | 7.0 | ✅ StringRedisTemplate |
-| Distributed Lock | Redisson | - | ⏳ TODO |
+| Distributed Lock | Redisson | 3.25.0 | ✅ Implemented |
 | Message Queue | RabbitMQ | 3.12 | ✅ |
-| File Storage | MinIO | - | ✅ |
-| AI Integration | Spring AI | - | ❌ Not Started |
+| File Storage | MinIO | 8.5.10 | ✅ |
+| AI Integration | Spring AI + 智谱AI | 1.0.0-M4 | ✅ |
+| Document Parsing | Apache POI + PDFBox | 5.2.5 / 2.0.29 | ✅ |
+| Security | Spring Security + JWT (jjwt 0.11.5) | - | ✅ |
+| Email | Spring Mail | - | ✅ |
+| JSON | Fastjson2 | 2.0.43 | ✅ |
+| Utilities | Hutool | 5.8.23 | ✅ |
 | Vector Database | Milvus/PgVector | - | ❌ Not Started |
-| Security | Spring Security | 6.1.5 | ✅ JWT + CORS |
-| Email | Jakarta Mail | - | ✅ |
 
 ## Development Environment Setup
 
@@ -83,17 +46,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. JDK 21
 2. Maven 3.9+
 3. Docker Desktop
-4. IntelliJ IDEA (Community Edition works)
-5. Postman or Apifox (for API testing)
-6. DBeaver / DataGrip (for database viewing)
 
 ### Starting Infrastructure
-
-The project requires Docker Compose services. Use `docker-compose.yml` with:
-- MySQL 8.0 (port 3307)
-- Redis 7 (password: redis123)
-- RabbitMQ (port 5672, management UI: 15672)
-- MinIO (port 9000, console: 9001)
 
 ```bash
 # Start all infrastructure services
@@ -103,332 +57,323 @@ docker-compose up -d
 docker-compose ps
 ```
 
+| Service | Port | Credentials |
+|---------|------|-------------|
+| MySQL | 3307 | smartats / smartats123 |
+| Redis | 6379 | password: redis123 |
+| RabbitMQ | 5672 (AMQP), 15672 (UI) | admin / admin123, VHost: smartats |
+| MinIO | 9000 (API), 9001 (Console) | admin / admin123456 |
+
 ### Build and Run
 
 ```bash
-# Build the project
 mvn clean install
-
-# Run the application
 mvn spring-boot:run
-
-# Or run the JAR directly
-java -jar target/smartats-*.jar
 ```
 
 ### Database Initialization
 
 ```bash
-# Initialize database tables
 mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < docker/mysql/init/01-init-database.sql
-
-# Create webhook tables
 mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < src/main/resources/db/webhook_tables.sql
 ```
 
-## Architecture Overview
+### Environment Variables
 
-The system consists of **five main processing chains**:
-
-1. **Authentication Chain**: Registration → Verification → Login → JWT Token → Redis Storage
-2. **Upload Chain**: Upload → MD5 Hash → Deduplication Check → File Storage → DB → MQ → Async Parse
-3. **Job Management Chain**: Create → Cache → Publish → View Count → Hot Ranking
-4. **Webhook Chain**: Event Trigger → Async Send → Signature → Retry → Log
-5. **Search Chain**: (Not Implemented) Keyword/Vector Search → RAG Retrieval
-
-### Critical Design Patterns
-
-**Async Processing Flow** (Resume Upload):
+Create `.env` file (already in `.gitignore`):
+```env
+ZHIPU_API_KEY=your_api_key_here
+ZHIPU_MODEL=glm-4-flash-250414
+MAIL_HOST=smtp.qq.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@qq.com
+MAIL_PASSWORD=your_qq_smtp_auth_code
+JWT_SECRET=your_production_secret_key_minimum_32_characters
 ```
-Upload → MD5 Hash → Redis Dedup Check → MinIO Storage → DB Record → Task Status (Redis) → MQ Message → Return taskId
-                                                          ↓
-                                      Consumer → Idempotency Check → Distributed Lock (TODO) → AI Parse (TODO) → Candidate DB → Vector Store (TODO) → Task Complete
-```
-
-**Caching Strategy**:
-- Read: Check Redis first, fallback to MySQL, populate cache
-- Write: Update MySQL, then delete cache key (delayed double delete for consistency)
-- Hot data: Use ZSet for rankings (hot jobs)
-- Atomic counters: Redis INCR + periodic sync to DB
-
-**Rate Limiting**: Redis + Lua scripts (implementation pending)
-
-**Distributed Locking**: Redisson with Watchdog (TODO: implementation needed)
 
 ## Module Structure
 
 ```
 src/main/java/com/smartats/
-├── common/                    # Shared utilities
-│   ├── result/               # Result wrapper, ResultCode
-│   ├── exception/            # BusinessException, GlobalExceptionHandler
-│   ├── constants/            # RedisKeyConstants, etc.
-│   ├── util/                 # FileValidationUtil, etc.
-│   ├── annotation/           # Custom annotations
-│   └── aspect/               # AOP aspects
-├── config/                   # Configuration classes
-│   ├── SecurityConfig.java    # Spring Security + CORS
-│   ├── RabbitMQConfig.java    # Exchange, Queue, DLQ
-│   ├── MinioConfig.java      # MinIO client
-│   └── AsyncConfig.java      # Thread pool for @Async
-├── module/                   # Business modules
-│   ├── auth/                # ✅ Authentication (95%)
-│   ├── job/                 # ✅ Job Management (90%)
-│   ├── resume/              # ⏳ Resume Upload (80%)
-│   ├── webhook/             # ⏳ Webhook (70%)
-│   ├── candidate/           # ❌ Not Started
-│   ├── interview/           # ❌ Not Started
-│   └── ai/                  # ❌ Not Started
-└── infrastructure/          # Infrastructure services
-    ├── email/               # ✅ EmailService
-    ├── mq/                  # ✅ MessagePublisher
-    └── storage/             # ✅ MinioFileStorageService
+├── SmartAtsApplication.java
+├── common/                                 # Shared (8 files)
+│   ├── constants/RedisKeyConstants.java    # All Redis key prefixes
+│   ├── exception/                          # BusinessException + GlobalExceptionHandler
+│   ├── handler/JsonTypeHandler.java        # MyBatis JSON type handler
+│   ├── result/                             # Result<T> + ResultCode (error codes: 10xxx~43xxx)
+│   └── util/                               # FileValidationUtil + DataMaskUtil
+├── config/                                 # Configuration (6 files)
+│   ├── SecurityConfig.java                 # Spring Security + CORS + JWT filter + whitelist
+│   ├── RabbitMQConfig.java                 # Exchange, Queue, DLX, DLQ
+│   ├── MinioConfig.java                    # MinIO client
+│   ├── AsyncConfig.java                    # @Async thread pools (asyncExecutor, webhookExecutor)
+│   ├── RedissonConfig.java                 # Redisson distributed lock client
+│   └── ZhipuAiConfig.java                  # 智谱AI (OpenAI-compatible)
+├── infrastructure/                         # Infrastructure (4 files)
+│   ├── email/EmailService.java             # HTML email with verification codes
+│   ├── mq/MessagePublisher.java            # RabbitMQ message publishing
+│   └── storage/                            # FileStorageService interface + MinIO impl
+└── module/                                 # Business modules (7 modules, 65 files)
+    ├── auth/          (12 files)           # ✅ 98% - Register, Login, JWT, Refresh, Verification
+    ├── job/           (10 files)           # ✅ 95% - CRUD, Cache, Hot Ranking, View Count Sync
+    ├── resume/        (11 files)           # ✅ 95% - Upload, Dedup, AI Parse, MQ Consumer
+    ├── candidate/     (7 files)            # ✅ 95% - CRUD, Advanced Filter, Cache, Data Masking
+    ├── application/   (8 files)            # ✅ 95% - Create, Status Flow, Multi-Query
+    ├── interview/     (7 files)            # ✅ 95% - Schedule, Feedback, Cancel, Query
+    └── webhook/       (10 files)           # ✅ 95% - CRUD, Test, 13 Event Types, HMAC Signing
 ```
+
+## Architecture Overview
+
+### Processing Chains
+
+1. **Authentication Chain**: Register → Verify Email → Login → JWT Token → Redis Storage → Refresh
+2. **Upload Chain**: Upload → MD5 Hash → Dedup Check → MinIO Storage → DB → MQ → AI Parse → Candidate DB → Webhook
+3. **Job Management Chain**: Create → Cache → Publish → View Count (Redis INCR) → Hot Ranking (ZSet) → Periodic DB Sync (GETDEL)
+4. **Recruitment Chain**: Create Application → Status Flow (PENDING→REVIEWING→INTERVIEW→OFFER/REJECTED) → Schedule Interview → Feedback
+5. **Webhook Chain**: Event Trigger → @Async Send → HMAC-SHA256 Signature → Retry → Log
+6. **Search Chain**: ❌ Not Implemented — Keyword/Vector Search → RAG Retrieval
+
+### Async Processing Flow (Resume)
+
+```
+Upload → MD5 Hash → Redis Dedup → MinIO Storage → DB Record → Task Status (Redis) → MQ Message → Return taskId
+                                                       ↓
+                                     Consumer → Idempotency Check → Redisson Lock → Extract Content (POI/PDFBox)
+                                       → AI Parse (智谱AI) → Save Candidate → Webhook Notify → Task Complete
+                                       ↓ (fail, retryCount < 3)
+                                     Republish with retryCount+1, ACK original
+                                       ↓ (retryCount >= 3)
+                                     NACK → DLQ (smartats.dlx → resume.parse.dlq)
+```
+
+### Caching Strategy
+
+- **Read**: Redis first → fallback MySQL → populate cache (30min TTL)
+- **Write**: Update MySQL → delete cache → CacheEvictionService async delayed double-delete (500ms)
+- **Hot data**: ZSet for rankings (10min TTL)
+- **Atomic counters**: Redis INCR + periodic GETDEL sync to DB (prevents count loss)
+
+### Distributed Locking
+
+Redisson with Watchdog — used in `ResumeParseConsumer` for fileHash-level locking during AI parsing.
 
 ## Database Schema
 
-### Existing Tables
+### 8 Tables
 
 | Table | Status | Notes |
 |-------|--------|-------|
-| `users` | ✅ | User accounts with roles, AI quota |
+| `users` | ✅ | User accounts with roles (ADMIN/HR/INTERVIEWER), AI quota |
 | `jobs` | ✅ | Job postings with JSON fields, full-text index |
-| `resumes` | ✅ | Resume files with MD5 deduplication |
-| `candidates` | ✅ | AI-extracted structured data (empty) |
-| `job_applications` | ✅ | Application tracking with match scores |
-| `interview_records` | ✅ | Interview records (empty) |
-| `webhook_configs` | ✅ | Webhook configuration |
-| `webhook_logs` | ✅ | Webhook call logs |
+| `resumes` | ✅ | Resume files with MD5 deduplication (unique index on file_hash) |
+| `candidates` | ✅ | AI-extracted structured data (skills JSON, work_experiences JSON) |
+| `job_applications` | ✅ | Application tracking with status flow and match scores |
+| `interview_records` | ✅ | Interview records with rounds, scores, recommendations |
+| `webhook_configs` | ✅ | Webhook configuration with event types and secrets |
+| `webhook_logs` | ✅ | Webhook delivery logs |
 
 ### Key Relationships
 
-- `resumes.file_hash` - Unique index for deduplication
+- `resumes.file_hash` — Unique index for deduplication
 - `candidates.resume_id` → `resumes.id` (1:1)
-- `job_applications.user_id` → `users.id`
 - `job_applications.job_id` → `jobs.id`
+- `job_applications.candidate_id` → `candidates.id`
 - `interview_records.application_id` → `job_applications.id`
 
 ## Redis Key Patterns
 
-| Pattern | Type | Purpose | TTL | Implementation |
-|---------|------|---------|-----|----------------|
-| `jwt:token:{userId}` | String | Access Token (revocation check) | 2h | ✅ UserService |
-| `jwt:refresh:{userId}` | String | Refresh Token | 7d | ✅ UserService |
-| `verification_code:{email}` | String | Email verification code | 5min | ✅ VerificationCodeService |
-| `verification_code_limit:{email}` | String | Rate limit for sending codes | 60s | ✅ VerificationCodeService |
-| `task:resume:{taskId}` | String | Resume parsing task status | 24h | ✅ ResumeService/Consumer |
-| `idempotent:resume:{resumeId}` | String | Idempotency check for MQ | 1h | ✅ ResumeParseConsumer |
-| `lock:resume:{fileHash}` | String | Distributed lock for parsing | 10min | ⏳ TODO (Redisson) |
-| `cache:job:{jobId}` | String | Job detail cache | 30min | ✅ JobService |
-| `cache:job:hot` | ZSet | Hot job ranking | 10min | ✅ JobService |
-| `counter:job:view:{jobId}` | String | Atomic view counter | - | ✅ JobService |
-| `dedup:resume:{fileHash}` | String | File deduplication mark | 7d | ✅ ResumeService |
+All key prefixes are centralized in `RedisKeyConstants.java`.
+
+| Pattern | Type | Purpose | TTL |
+|---------|------|---------|-----|
+| `jwt:token:{userId}` | String | Access Token | 2h |
+| `jwt:refresh:{userId}` | String | Refresh Token | 7d |
+| `verification_code:{email}` | String | Email verification code | 5min |
+| `verification_code-limit:{email}` | String | Rate limit for sending codes | 60s |
+| `task:resume:{taskId}` | String | Resume parsing task status | 24h |
+| `idempotent:resume:{resumeId}` | String | Idempotency check for MQ | 1h |
+| `dedup:resume:{fileHash}` | String | File deduplication mark | 7d |
+| `lock:resume:{fileHash}` | String | Redisson distributed lock | auto-release |
+| `cache:job:{jobId}` | String | Job detail cache | 30min |
+| `cache:job:hot` | ZSet | Hot job ranking | 10min |
+| `counter:job:view:{jobId}` | String | Atomic view counter | persistent |
+| `cache:candidate:{candidateId}` | String | Candidate cache | 30min |
+| `cache:application:{appId}` | String | Application cache | 30min |
+| `cache:interview:{interviewId}` | String | Interview cache | 30min |
 
 ## RabbitMQ Topology
 
-- **Exchange**: `smartats.exchange` (Direct)
+- **Exchange**: `smartats.exchange` (Direct, durable)
 - **Queue**: `resume.parse.queue`
 - **DLX**: `smartats.dlx` (Dead Letter Exchange)
 - **DLQ**: `resume.parse.dlq`
 - **Routing Key**: `resume.parse`
+- **Retry**: Republish with incremented retryCount (max 3), then NACK to DLQ
+- **Message**: JSON with `taskId`, `resumeId`, `filePath`, `fileHash`, `uploaderId`, `retryCount`
 
-**Message Flow**:
-```
-Producer → smartats.exchange → resume.parse.queue → Consumer
-                                        ↓ (fail after retry)
-                                  smartats.dlx → resume.parse.dlq
-```
+## API Endpoints Summary (37 total)
 
-**Status**: ✅ Complete with JSON converter, manual ACK, retry mechanism
-
-## API Endpoints Summary
-
-### Authentication (✅ Complete)
+### Authentication — 5 endpoints
 | Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/v1/auth/register` | ❌ | User registration |
-| POST | `/api/v1/auth/login` | ❌ | User login |
-| POST | `/api/v1/auth/send-verification-code` | ❌ | Send verification code |
-| GET | `/api/v1/auth/test` | ✅ | Test authentication |
+|--------|------|:----:|-------------|
+| POST | `/api/v1/auth/register` | ❌ | Register (BCrypt, ADMIN role blocked) |
+| POST | `/api/v1/auth/login` | ❌ | Login (accessToken 2h + refreshToken 7d) |
+| POST | `/api/v1/auth/send-verification-code` | ❌ | Send email verification code |
+| POST | `/api/v1/auth/refresh` | ❌ | Refresh token |
+| GET | `/api/v1/auth/test` | ✅ | Test auth status |
 
-### Jobs (✅ Complete)
+### Jobs — 8 endpoints
 | Method | Path | Auth | Description |
-|--------|------|------|-------------|
+|--------|------|:----:|-------------|
 | POST | `/api/v1/jobs` | ✅ | Create job |
 | PUT | `/api/v1/jobs` | ✅ | Update job |
-| GET | `/api/v1/jobs/{id}` | ❌ | Get job detail |
+| GET | `/api/v1/jobs/{id}` | ❌ | Get job detail (cached) |
 | GET | `/api/v1/jobs` | ❌ | List jobs (paginated) |
 | POST | `/api/v1/jobs/{id}/publish` | ✅ | Publish job |
 | POST | `/api/v1/jobs/{id}/close` | ✅ | Close job |
 | DELETE | `/api/v1/jobs/{id}` | ✅ | Delete job |
-| GET | `/api/v1/jobs/hot` | ❌ | Get hot jobs |
+| GET | `/api/v1/jobs/hot` | ❌ | Hot jobs ranking |
 
-### Resumes (⏳ Partial)
+### Resumes — 4 endpoints
 | Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/v1/resumes/upload` | ✅ | Upload resume |
-| GET | `/api/v1/resumes/tasks/{taskId}` | ✅ | Get task status |
+|--------|------|:----:|-------------|
+| POST | `/api/v1/resumes/upload` | ✅ | Upload resume (PDF/DOC/DOCX, ≤10MB) |
+| GET | `/api/v1/resumes/tasks/{taskId}` | ✅ | Get parse task status |
 | GET | `/api/v1/resumes/{id}` | ✅ | Get resume detail |
 | GET | `/api/v1/resumes` | ✅ | List resumes (paginated) |
 
-### Webhooks (⏳ Partial)
+### Candidates — 5 endpoints
 | Method | Path | Auth | Description |
-|--------|------|------|-------------|
+|--------|------|:----:|-------------|
+| GET | `/api/v1/candidates/resume/{resumeId}` | ✅ | Get candidate by resume ID |
+| GET | `/api/v1/candidates/{id}` | ✅ | Get candidate detail (cached) |
+| PUT | `/api/v1/candidates/{id}` | ✅ | Update candidate (@Valid) |
+| DELETE | `/api/v1/candidates/{id}` | ✅ | Delete candidate |
+| GET | `/api/v1/candidates` | ✅ | List (multi-filter + data masking) |
+
+### Applications — 6 endpoints
+| Method | Path | Auth | Description |
+|--------|------|:----:|-------------|
+| POST | `/api/v1/applications` | ✅ | Create application (dedup) |
+| PUT | `/api/v1/applications/{id}/status` | ✅ | Update status |
+| GET | `/api/v1/applications/{id}` | ✅ | Get application detail |
+| GET | `/api/v1/applications/job/{jobId}` | ✅ | List by job |
+| GET | `/api/v1/applications/candidate/{candidateId}` | ✅ | List by candidate |
+| GET | `/api/v1/applications` | ✅ | List (paginated) |
+
+### Interviews — 5 endpoints
+| Method | Path | Auth | Description |
+|--------|------|:----:|-------------|
+| POST | `/api/v1/interviews` | ✅ | Schedule interview |
+| PUT | `/api/v1/interviews/{id}/feedback` | ✅ | Submit feedback |
+| POST | `/api/v1/interviews/{id}/cancel` | ✅ | Cancel interview |
+| GET | `/api/v1/interviews/{id}` | ✅ | Get interview detail |
+| GET | `/api/v1/interviews/application/{appId}` | ✅ | List by application |
+
+### Webhooks — 4 endpoints
+| Method | Path | Auth | Description |
+|--------|------|:----:|-------------|
 | POST | `/api/v1/webhooks` | ✅ | Create webhook |
 | GET | `/api/v1/webhooks` | ✅ | List webhooks |
 | DELETE | `/api/v1/webhooks/{id}` | ✅ | Delete webhook |
-| POST | `/api/v1/webhooks/{id}/test` | ✅ | Test webhook (TODO) |
+| POST | `/api/v1/webhooks/{id}/test` | ✅ | Test webhook |
+
+## Webhook Event Types (13)
+
+`resume.uploaded`, `resume.parse_completed`, `resume.parse_failed`, `candidate.created`, `candidate.updated`, `application.submitted`, `application.status_changed`, `interview.scheduled`, `interview.completed`, `interview.cancelled`, `system.error`, `system.maintenance`
 
 ## Development Guidelines
 
 ### ⚠️ Critical Rules
 
 1. **Use StringRedisTemplate**, NOT `RedisTemplate<String, Object>`
-   - Project standard for consistency
    - Manual JSON serialization with ObjectMapper
 
 2. **Use LambdaQueryWrapper**, NOT string-based QueryWrapper
    - Type-safe and refactor-friendly
 
-3. **Always check for existing implementations before creating new code**
-   - Search project for similar patterns
-   - Follow existing code style
+3. **Always use `BusinessException(ResultCode.xxx)`** for business errors
+   - Never throw raw `RuntimeException` or `IllegalArgumentException`
+   - GlobalExceptionHandler catches all exceptions
 
 4. **File uploads MUST use FileValidationUtil**
-   - Content-Type validation (basic)
-   - File header/magic number validation (security)
+   - Content-Type + Magic Number validation
    - Filename sanitization (path traversal prevention)
 
-5. **JWT extraction patterns** (choose one, don't mix):
-   - `JwtUtil.getUserIdFromToken(request)` - Direct extraction
-   - `Authentication.getPrincipal()` - Spring Security way
-   - Current code uses both - needs standardization
+5. **JWT extraction**: Use `Authentication.getPrincipal()` (Spring Security way)
+   - Returns `Long userId` from SecurityContext
+
+6. **Redis Key prefixes**: Always use `RedisKeyConstants.*` constants
+   - Never hardcode key strings
+
+7. **@Async methods must be in a separate class** (not self-call)
+   - Use `CacheEvictionService` pattern for delayed double-delete
+   - Spring AOP proxy only works on inter-bean calls
 
 ### Code Quality Standards
 
-**MyBatis-Plus**:
 ```java
-// ✅ Correct
-userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
-
-// ❌ Wrong
-userMapper.selectOne(new QueryWrapper<User>().eq("username", username));
-```
-
-**Exception Handling**:
-- Use `BusinessException` for business errors
-- Use `ResultCode` enum for error codes
-- Global handler catches all exceptions
-
-**Redis Usage**:
-```java
-// ✅ Correct (project standard)
+// ✅ Correct Redis usage
 String json = objectMapper.writeValueAsString(obj);
 stringRedisTemplate.opsForValue().set(key, json, ttl, TimeUnit.SECONDS);
 
-// ❌ Wrong (not used in project)
-redisTemplate.opsForValue().set(key, obj);
+// ✅ Correct exception handling
+throw new BusinessException(ResultCode.NOT_FOUND, "候选人不存在");
+
+// ✅ Correct transaction annotation
+@Transactional(rollbackFor = Exception.class)
 ```
 
-**Logging**:
+### Logging Convention
 - INFO: Business milestones
 - WARN: Potential issues
-- ERROR: System errors
+- ERROR: System errors (never log passwords or sensitive data)
 - DEBUG: Detailed info (disabled in prod)
-
-### Transaction Management
-
-Use `@Transactional(rollbackFor = Exception.class)` for:
-- Multi-step database operations
-- Operations that must be atomic
-- Any method modifying multiple tables
 
 ## Known Issues and TODOs
 
-### Critical (Must Fix)
-1. **Compilation Error**: `@URL` annotation not found
-   - Fix: Add jakarta.validation-api dependency to pom.xml
-
-2. **AI Parsing Not Implemented**: ResumeParseConsumer uses mock
-   - Impact: Candidates cannot be extracted from resumes
-   - Location: `ResumeParseConsumer.java:81-87`
-
-3. **Distributed Lock Not Implemented**: Using TODO comment
-   - Impact: Race condition risk in concurrent parsing
-   - Location: `ResumeParseConsumer.java:66`
+### High Priority
+1. **Test Coverage ~0%** — Only 1 MinIO integration test
+   - Need Service-layer unit tests with Mockito
+   - Need Controller integration tests with MockMvc
 
 ### Medium Priority
-4. **Webhook Test Function**: Endpoint exists but not implemented
-   - Location: `WebhookController.java:86`
-
-5. **JWT Extraction Inconsistency**: Two different patterns used
-   - Need to standardize on one approach
-
-6. **Configuration Security**: Sensitive data hardcoded in application.yml
-   - JWT secret, DB passwords, Redis password, etc.
-   - Should use environment variables
+2. **Vector Search Not Implemented** — RAG semantic search is the project differentiator
+3. **Swagger/OpenAPI Not Configured** — 37 endpoints without online docs
+4. **Batch Upload Missing** — Only single-file upload available
+5. **Environment Separation** — No dev/staging/prod profiles
+6. **CORS Configuration** — Currently allows all origins (production risk)
 
 ### Low Priority
-7. **Retry Mechanism**: Message retry logic is simplified
-   - Location: `ResumeParseConsumer.java:188`
-   - Should implement proper retry with backoff
+7. **LoginResponse.todayAiUsed** — TODO: fetch from Redis
+8. **ResumeService comment** — Says "TODO: MQ consumer" but it's already implemented (stale comment)
 
-8. **Test Coverage**: No unit tests for critical business logic
+## Reference Documentation
 
-9. **API Documentation**: Swagger/OpenAPI not configured
-
-## Testing
-
-### Manual Testing Checklist
-
-Before marking a feature complete:
-- [ ] API returns correct response codes
-- [ ] Error scenarios return appropriate messages
-- [ ] Database transactions handled correctly
-- [ ] Sensitive data not exposed
-- [ ] Logs written at appropriate levels
-- [ ] Code follows project style
-
-### Test with Webhook.site
-
-For testing webhooks without a real server:
-1. Visit https://webhook.site
-2. Copy the provided URL
-3. Create a webhook configuration with that URL
-4. Trigger an event (e.g., upload a resume)
-5. View received requests on webhook.site
+- `docs/project-progress-summary.md` — Detailed module analysis and statistics
+- `docs/next-steps-plan-2026-02-23.md` — Development priorities and technical decisions
+- `docs/SmartATS-Design-Document.md` — Complete technical specification, database schema, API definitions
+- `docs/SmartATS-从0到1开发教学手册.md` — Step-by-step development tutorial
 
 ## Git Workflow
 
-### Commit Message Format
+### Commit Message Format (Chinese)
 
 ```
-type(scope): subject
+type(scope): 中文描述
 
-body
-
-footer
+详细说明（可选）
 ```
 
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `refactor`: Code refactoring
-- `perf`: Performance improvement
-- `security`: Security fix
-- `test`: Test additions
-- `chore`: Build/config changes
+Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `security`, `test`, `chore`
 
-Examples:
-- `feat(auth): add refresh token support`
-- `fix(resume): correct file deduplication logic`
-- `security(webhook): add signature verification`
-- `docs(api): update authentication guide`
+### Recent Commits
 
-### Branch Strategy
-
-- `main` - Production code
-- `develop` - Development branch
-- `feature/*` - Feature branches
-- `fix/*` - Bug fix branches
+| Hash | Description |
+|------|-------------|
+| `b31725f` | refactor: 全面优化代码质量（34项问题） |
+| `2f8e0fd` | feat(application,interview): 职位申请和面试记录模块 |
+| `6290576` | feat(candidate): 高级筛选、Redis缓存、脱敏 |
+| `23fe2ea` | feat(auth/webhook): RefreshToken 刷新 + Webhook 测试 |
+| `6f5beb6` | feat(resume/candidate): AI 简历解析及候选人模块 |
