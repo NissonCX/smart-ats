@@ -27,6 +27,8 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 职位申请服务
@@ -310,9 +312,30 @@ public class JobApplicationService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 将实体转换为响应 DTO，关联查询职位标题和候选人姓名
+     * 将实体转换为响应 DTO，关联查询职位标题和候选人姓名（仅单条查询使用）
      */
     private ApplicationResponse convertToResponse(JobApplication application) {
+        ApplicationResponse response = buildBaseResponse(application);
+
+        // 关联查询职位标题
+        Job job = jobMapper.selectById(application.getJobId());
+        if (job != null) {
+            response.setJobTitle(job.getTitle());
+        }
+
+        // 关联查询候选人姓名
+        Candidate candidate = candidateMapper.selectById(application.getCandidateId());
+        if (candidate != null) {
+            response.setCandidateName(candidate.getName());
+        }
+
+        return response;
+    }
+
+    /**
+     * 构建基础响应对象（不包含关联查询，复用于单条和批量转换）
+     */
+    private ApplicationResponse buildBaseResponse(JobApplication application) {
         ApplicationResponse response = new ApplicationResponse();
         response.setId(application.getId());
         response.setJobId(application.getJobId());
@@ -336,33 +359,60 @@ public class JobApplicationService {
             }
         }
 
-        // 关联查询职位标题
-        Job job = jobMapper.selectById(application.getJobId());
+        return response;
+    }
+
+    /**
+     * 分页结果转换（批量查询关联数据，避免 N+1）
+     */
+    private Page<ApplicationResponse> convertPage(Page<JobApplication> sourcePage) {
+        List<JobApplication> records = sourcePage.getRecords();
+        if (records.isEmpty()) {
+            Page<ApplicationResponse> responsePage = new Page<>(
+                    sourcePage.getCurrent(), sourcePage.getSize(), sourcePage.getTotal());
+            responsePage.setRecords(List.of());
+            return responsePage;
+        }
+
+        // 批量收集所有 jobId 和 candidateId
+        Set<Long> jobIds = records.stream().map(JobApplication::getJobId).collect(Collectors.toSet());
+        Set<Long> candidateIds = records.stream().map(JobApplication::getCandidateId).collect(Collectors.toSet());
+
+        // 一次性查询所有关联职位和候选人（避免 N+1）
+        Map<Long, Job> jobMap = jobMapper.selectBatchIds(jobIds).stream()
+                .collect(Collectors.toMap(Job::getId, Function.identity()));
+        Map<Long, Candidate> candidateMap = candidateMapper.selectBatchIds(candidateIds).stream()
+                .collect(Collectors.toMap(Candidate::getId, Function.identity()));
+
+        // 使用批量加载的数据转换
+        List<ApplicationResponse> responseList = records.stream()
+                .map(app -> convertToResponseWithMaps(app, jobMap, candidateMap))
+                .toList();
+
+        Page<ApplicationResponse> responsePage = new Page<>(
+                sourcePage.getCurrent(), sourcePage.getSize(), sourcePage.getTotal());
+        responsePage.setRecords(responseList);
+        return responsePage;
+    }
+
+    /**
+     * 将实体转换为响应 DTO，使用预加载的 Map 避免额外查询
+     */
+    private ApplicationResponse convertToResponseWithMaps(
+            JobApplication application, Map<Long, Job> jobMap, Map<Long, Candidate> candidateMap) {
+        ApplicationResponse response = buildBaseResponse(application);
+
+        Job job = jobMap.get(application.getJobId());
         if (job != null) {
             response.setJobTitle(job.getTitle());
         }
 
-        // 关联查询候选人姓名
-        Candidate candidate = candidateMapper.selectById(application.getCandidateId());
+        Candidate candidate = candidateMap.get(application.getCandidateId());
         if (candidate != null) {
             response.setCandidateName(candidate.getName());
         }
 
         return response;
-    }
-
-    /**
-     * 分页结果转换
-     */
-    private Page<ApplicationResponse> convertPage(Page<JobApplication> sourcePage) {
-        Page<ApplicationResponse> responsePage = new Page<>(
-                sourcePage.getCurrent(), sourcePage.getSize(), sourcePage.getTotal());
-        responsePage.setRecords(
-                sourcePage.getRecords().stream()
-                        .map(this::convertToResponse)
-                        .toList()
-        );
-        return responsePage;
     }
 
     /**

@@ -15,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -33,6 +32,7 @@ public class JobService {
     private final JobMapper jobMapper;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final CacheEvictionService cacheEvictionService;
 
     /**
      * 创建职位
@@ -160,32 +160,12 @@ public class JobService {
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 第 6 步：延迟双删（异步删除缓存）
+        // 第 6 步：延迟双删（异步删除缓存，通过独立 Service 保证代理生效）
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        asyncDeleteCache(cacheKey);
+        cacheEvictionService.asyncDeleteCache(cacheKey);
 
         log.info("职位更新成功：id={}", job.getId());
-    }
-
-    /**
-     * 异步延迟删除缓存（延迟双删）
-     *
-     * @param cacheKey 缓存 Key
-     */
-    @Async("asyncExecutor")
-    public void asyncDeleteCache(String cacheKey) {
-        try {
-            // 延迟 500ms（大于读请求的耗时）
-            Thread.sleep(500);
-
-            redisTemplate.delete(cacheKey);
-            log.debug("第 2 次删除缓存（延迟）：key={}", cacheKey);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("延迟删除缓存失败：key={}", cacheKey, e);
-        }
     }
 
     /**
@@ -200,7 +180,30 @@ public class JobService {
         String counterKey = RedisKeyConstants.COUNTER_JOB_VIEW_PREFIX + id;
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 第 1 步：从数据库读取职位数据（必须先读，获取基础浏览量）
+        // 第 1 步：原子自增 Redis 增量计数器（每次访问都计数）
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        Long redisIncrement = redisTemplate.opsForValue().increment(counterKey);
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 第 2 步：尝试从缓存读取职位信息（缓存命中时跟过 DB）
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        String cachedJson = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedJson != null) {
+            try {
+                JobResponse cached = objectMapper.readValue(cachedJson, JobResponse.class);
+                // 缓存中的浏览量可能已过时，用缓存的 baseViewCount + 当前 Redis 增量覆盖
+                cached.setViewCount(cached.getViewCount() != null ? cached.getViewCount() + 1 : redisIncrement.intValue());
+                log.debug("缓存命中：jobId={}", id);
+                return cached;
+            } catch (Exception e) {
+                log.warn("职位缓存反序列化失败，降级查库：id={}", id, e);
+            }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 第 3 步：缓存未命中，从数据库读取
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         Job job = jobMapper.selectById(id);
@@ -212,26 +215,17 @@ public class JobService {
         // 数据库中存储的是历史累积浏览量
         int baseViewCount = job.getViewCount() != null ? job.getViewCount() : 0;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 第 2 步：原子自增 Redis 增量计数器
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-        Long redisIncrement = redisTemplate.opsForValue().increment(counterKey);
         log.debug("Redis 计数器自增：key={}, increment={}, baseViewCount={}",
             counterKey, redisIncrement, baseViewCount);
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 第 3 步：计算总浏览量并返回
+        // 第 4 步：计算总浏览量并回填缓存
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         JobResponse response = convertToResponse(job);
 
         // 总浏览量 = 数据库累积值 + Redis增量计数器
         response.setViewCount(baseViewCount + redisIncrement.intValue());
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // 第 4 步：更新缓存（缓存的是总浏览量，不是单独的Redis计数器）
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         try {
             redisTemplate.opsForValue().set(cacheKey,
@@ -404,11 +398,15 @@ public class JobService {
     public List<JobResponse> getHotJobs(Integer limit) {
         log.info("查询热门职位：limit={}", limit);
 
-        LambdaQueryWrapper<Job> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(Job::getStatus, "PUBLISHED").orderByDesc(Job::getViewCount).last("LIMIT " + (limit != null ? limit : 10));
+        // 安全边界校验，避免使用 .last() 拼接 SQL
+        int safeLimit = (limit != null && limit > 0 && limit <= 50) ? limit : 10;
 
-        List<Job> jobs = jobMapper.selectList(queryWrapper);
-        return jobs.stream().map(this::convertToResponse).collect(Collectors.toList());
+        Page<Job> page = new Page<>(1, safeLimit);
+        LambdaQueryWrapper<Job> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Job::getStatus, "PUBLISHED").orderByDesc(Job::getViewCount);
+
+        Page<Job> resultPage = jobMapper.selectPage(page, queryWrapper);
+        return resultPage.getRecords().stream().map(this::convertToResponse).collect(Collectors.toList());
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.smartats.infrastructure.storage;
 
+import com.smartats.common.exception.BusinessException;
+import com.smartats.common.result.ResultCode;
 import io.minio.*;
 import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +36,7 @@ public class MinioFileStorageService implements FileStorageService {
             return uploadFile(inputStream, objectName, size, contentType);
         } catch (Exception e) {
             log.error("上传文件失败: objectName={}", objectName, e);
-            throw new RuntimeException("文件上传失败", e);
+            throw new BusinessException(ResultCode.FILE_UPLOAD_ERROR, "文件上传失败");
         }
     }
 
@@ -61,7 +63,7 @@ public class MinioFileStorageService implements FileStorageService {
 
         } catch (Exception e) {
             log.error("上传文件流失败: objectName={}", objectName, e);
-            throw new RuntimeException("文件上传失败", e);
+            throw new BusinessException(ResultCode.FILE_UPLOAD_ERROR, "文件上传失败");
         }
     }
 
@@ -79,7 +81,7 @@ public class MinioFileStorageService implements FileStorageService {
 
         } catch (Exception e) {
             log.error("删除文件失败: objectName={}", objectName, e);
-            throw new RuntimeException("文件删除失败", e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "文件删除失败");
         }
     }
 
@@ -103,7 +105,7 @@ public class MinioFileStorageService implements FileStorageService {
 
         } catch (Exception e) {
             log.error("生成预签名URL失败: objectName={}", objectName, e);
-            throw new RuntimeException("生成预签名URL失败", e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "生成预签名URL失败");
         }
     }
 
@@ -176,7 +178,7 @@ public class MinioFileStorageService implements FileStorageService {
 
         } catch (Exception e) {
             log.error("检查/创建 Bucket 失败: bucket={}", bucketName, e);
-            throw new RuntimeException("Bucket 初始化失败", e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "Bucket 初始化失败");
         }
     }
 }

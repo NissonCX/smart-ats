@@ -13,7 +13,7 @@ import com.smartats.module.auth.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 public class UserService {
 
     private final JwtUtil jwtUtil;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final VerificationCodeService verificationCodeService;
     private final StringRedisTemplate redisTemplate;
@@ -68,7 +68,7 @@ public class UserService {
         // 第 3 步：密码加密（BCrypt）
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         String encodedPassword = passwordEncoder.encode(request.getPassword());
-        log.debug("密码已加密：原始密码={}，加密后={}", request.getPassword(), encodedPassword);
+        log.debug("密码已加密");
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // 第 4 步：创建用户对象

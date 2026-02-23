@@ -36,14 +36,14 @@ public class JobViewCountSyncScheduler {
     /**
      * 定时同步 Redis 浏览量计数器到数据库
      * <p>
-     * 执行频率：每 1 分钟执行一次
+     * 执行频率：每 10 分钟执行一次
      * <p>
      * 执行逻辑：
      * 1. 扫描所有 counter:job:view:* 键
-     * 2. 批量更新对应的 jobs 表记录
-     * 3. 删除已同步的 Redis 计数器
+     * 2. 原子性读取并删除计数器（GETDEL 避免丢失增量）
+     * 3. 批量更新对应的 jobs 表记录
      */
-    @Scheduled(fixedRate = 600000)  // 60 秒执行一次
+    @Scheduled(fixedRate = 600000)  // 10 分钟执行一次
     public void syncViewCountToDatabase() {
         long startTime = System.currentTimeMillis();
         log.info("开始同步职位浏览量：Redis → MySQL");
@@ -92,7 +92,8 @@ public class JobViewCountSyncScheduler {
 
                 try {
                     Long jobId = Long.parseLong(jobIdStr);
-                    String countStr = redisTemplate.opsForValue().get(counterKey);
+                    // 使用 GETDEL 原子性读取并删除，避免 GET+DELETE 之间的增量丢失
+                    String countStr = redisTemplate.opsForValue().getAndDelete(counterKey);
 
                     if (countStr != null) {
                         int increment = Integer.parseInt(countStr);
@@ -123,12 +124,8 @@ public class JobViewCountSyncScheduler {
                         job.setViewCount(currentCount + batch.increment());
                         jobMapper.updateById(job);
                         successCount++;
-
-                        // 同步成功后删除 Redis 计数器
-                        redisTemplate.delete(batch.counterKey());
                     } else {
                         log.warn("职位不存在，跳过同步：jobId={}", batch.jobId());
-                        redisTemplate.delete(batch.counterKey());  // 清理无效计数器
                     }
                 } catch (Exception e) {
                     log.error("同步失败：jobId={}, increment={}", batch.jobId(), batch.increment(), e);

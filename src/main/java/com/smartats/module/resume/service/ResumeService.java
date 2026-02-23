@@ -3,6 +3,7 @@ package com.smartats.module.resume.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartats.common.constants.RedisKeyConstants;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
 import com.smartats.common.util.FileValidationUtil;
@@ -46,8 +47,8 @@ public class ResumeService {
     private final ObjectMapper objectMapper;
     private final MessagePublisher messagePublisher;
 
-    private static final String RESUME_DEDUP_KEY_PREFIX = "dedup:resume:";
-    private static final String TASK_STATUS_KEY_PREFIX = "task:resume:";
+    private static final String RESUME_DEDUP_KEY_PREFIX = RedisKeyConstants.RESUME_DEDUP_KEY_PREFIX;
+    private static final String TASK_STATUS_KEY_PREFIX = RedisKeyConstants.RESUME_TASK_KEY_PREFIX;
     private static final long TASK_STATUS_TTL = 24; // 24小时
 
     /**
@@ -136,7 +137,17 @@ public class ResumeService {
 
         } catch (Exception e) {
             log.error("发送解析消息失败: taskId={}", taskId, e);
-            // 不抛异常，允许用户重试查询状态
+            // MQ 发送失败时更新任务状态为 FAILED，避免用户永久看到 QUEUED
+            try {
+                TaskStatusResponse failedStatus = new TaskStatusResponse();
+                failedStatus.setStatus("FAILED");
+                failedStatus.setProgress(0);
+                failedStatus.setErrorMessage("消息队列发送失败，请稍后重试");
+                stringRedisTemplate.opsForValue().set(taskKey,
+                        objectMapper.writeValueAsString(failedStatus), TASK_STATUS_TTL, TimeUnit.HOURS);
+            } catch (Exception ex) {
+                log.error("更新失败状态异常: taskId={}", taskId, ex);
+            }
         }
 
         log.info("简历上传成功: resumeId={}, taskId={}, hash={}", resume.getId(), taskId, fileHash);

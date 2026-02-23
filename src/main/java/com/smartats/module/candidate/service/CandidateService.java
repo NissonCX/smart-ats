@@ -6,7 +6,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.constants.RedisKeyConstants;
+import com.smartats.common.exception.BusinessException;
+import com.smartats.common.result.ResultCode;
 import com.smartats.module.candidate.dto.CandidateQueryRequest;
+import com.smartats.module.candidate.dto.CandidateUpdateRequest;
 import com.smartats.module.candidate.entity.Candidate;
 import com.smartats.module.candidate.mapper.CandidateMapper;
 import com.smartats.module.resume.dto.CandidateInfo;
@@ -76,7 +79,7 @@ public class CandidateService {
 
         Candidate candidate = candidateMapper.selectById(id);
         if (candidate == null) {
-            throw new RuntimeException("候选人不存在: id=" + id);
+            throw new BusinessException(ResultCode.NOT_FOUND, "候选人不存在: id=" + id);
         }
 
         buildFromCandidateInfo(candidate, candidateInfo, rawJson);
@@ -146,6 +149,42 @@ public class CandidateService {
         evictCache(candidate.getId());
         log.info("候选人手动更新成功: candidateId={}", candidate.getId());
         return getById(candidate.getId());
+    }
+
+    /**
+     * 使用 DTO 部分更新候选人字段（仅更新非 null 字段）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Candidate updateManual(Long id, CandidateUpdateRequest request) {
+        log.info("更新候选人信息: id={}", id);
+
+        Candidate candidate = candidateMapper.selectById(id);
+        if (candidate == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "候选人不存在");
+        }
+
+        // 仅更新非 null 字段
+        if (request.getName() != null) candidate.setName(request.getName());
+        if (request.getPhone() != null) candidate.setPhone(request.getPhone());
+        if (request.getEmail() != null) candidate.setEmail(request.getEmail());
+        if (request.getGender() != null) candidate.setGender(request.getGender());
+        if (request.getAge() != null) candidate.setAge(request.getAge());
+        if (request.getEducation() != null) candidate.setEducation(request.getEducation());
+        if (request.getSchool() != null) candidate.setSchool(request.getSchool());
+        if (request.getMajor() != null) candidate.setMajor(request.getMajor());
+        if (request.getGraduationYear() != null) candidate.setGraduationYear(request.getGraduationYear());
+        if (request.getWorkYears() != null) candidate.setWorkYears(request.getWorkYears());
+        if (request.getCurrentCompany() != null) candidate.setCurrentCompany(request.getCurrentCompany());
+        if (request.getCurrentPosition() != null) candidate.setCurrentPosition(request.getCurrentPosition());
+        if (request.getSkills() != null) candidate.setSkills(request.getSkills());
+        if (request.getSelfEvaluation() != null) candidate.setSelfEvaluation(request.getSelfEvaluation());
+
+        candidate.setUpdatedAt(LocalDateTime.now());
+        candidateMapper.updateById(candidate);
+        evictCache(id);
+
+        log.info("候选人更新成功: candidateId={}", id);
+        return getById(id);
     }
 
     /**

@@ -2,6 +2,7 @@ package com.smartats.module.resume.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
+import com.smartats.common.constants.RedisKeyConstants;
 import com.smartats.config.RabbitMQConfig;
 import com.smartats.module.resume.dto.ResumeParseMessage;
 import com.smartats.module.resume.dto.TaskStatusResponse;
@@ -41,8 +42,8 @@ public class ResumeParseConsumer {
     private final WebhookService webhookService;
     private final ResumeMapper resumeMapper;
 
-    private static final String TASK_STATUS_KEY_PREFIX = "task:resume:";
-    private static final String LOCK_KEY_PREFIX = "lock:resume:";
+    private static final String TASK_STATUS_KEY_PREFIX = RedisKeyConstants.RESUME_TASK_KEY_PREFIX;
+    private static final String LOCK_KEY_PREFIX = RedisKeyConstants.RESUME_LOCK_KEY_PREFIX;
 
     /**
      * 消费简历解析消息
@@ -229,10 +230,25 @@ public class ResumeParseConsumer {
         int retryCount = message.getRetryCount() == null ? 0 : message.getRetryCount();
 
         if (retryCount < 3) {
-            // 重试
-            log.info("消息重试: retryCount={}", retryCount);
-            // TODO: 重新发送到队列，增加重试次数
-            channel.basicNack(deliveryTag, false, true);
+            // 重新发布消息到队列，递增重试计数（避免 basicNack requeue 导致无限循环）
+            log.info("消息重试: retryCount={}, 即将发送第 {} 次重试", retryCount, retryCount + 1);
+            message.setRetryCount(retryCount + 1);
+            try {
+                // 通过 MessagePublisher 重新发送（带递增的 retryCount）
+                String json = objectMapper.writeValueAsString(message);
+                channel.basicPublish(
+                        com.smartats.config.RabbitMQConfig.RESUME_EXCHANGE,
+                        com.smartats.config.RabbitMQConfig.RESUME_PARSE_ROUTING_KEY,
+                        new com.rabbitmq.client.AMQP.BasicProperties.Builder()
+                                .contentType("application/json")
+                                .build(),
+                        json.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                );
+            } catch (Exception e) {
+                log.error("重试消息发送失败，拒绝进入死信队列: retryCount={}", retryCount, e);
+            }
+            // ACK 原消息，避免重复消费
+            channel.basicAck(deliveryTag, false);
         } else {
             // 拒绝，进入死信队列
             log.error("消息重试次数超限，进入死信队列: retryCount={}", retryCount);

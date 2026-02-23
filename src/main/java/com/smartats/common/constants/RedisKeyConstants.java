@@ -83,6 +83,39 @@ public class RedisKeyConstants {
      */
     public static final String RESUME_TASK_KEY_PREFIX = "task:resume:";
 
+    /**
+     * 简历解析分布式锁 Key 前缀
+     * <p>
+     * 完整格式：lock:resume:{fileHash}
+     * <p>
+     * Value：锁标识
+     * <p>
+     * TTL：10分钟
+     */
+    public static final String RESUME_LOCK_KEY_PREFIX = "lock:resume:";
+
+    /**
+     * 简历解析幂等性检查 Key 前缀
+     * <p>
+     * 完整格式：idempotent:resume:{resumeId}
+     * <p>
+     * Value：已处理标记
+     * <p>
+     * TTL：1小时
+     */
+    public static final String RESUME_IDEMPOTENT_KEY_PREFIX = "idempotent:resume:";
+
+    /**
+     * 简历文件去重 Key 前缀
+     * <p>
+     * 完整格式：dedup:resume:{fileHash}
+     * <p>
+     * Value：已存在标记
+     * <p>
+     * TTL：7天
+     */
+    public static final String RESUME_DEDUP_KEY_PREFIX = "dedup:resume:";
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 职位缓存相关
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

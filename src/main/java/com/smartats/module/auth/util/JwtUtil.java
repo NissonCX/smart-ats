@@ -91,7 +91,8 @@ public class JwtUtil {
             Claims claims = parseToken(token);
             return claims.getExpiration().before(new Date());
         } catch (Exception e) {
-            return false;
+            // 解析异常视为已过期（安全优先）
+            return true;
         }
     }
 

@@ -3,6 +3,8 @@ package com.smartats.module.webhook.service;
 import cn.hutool.crypto.SecureUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartats.common.exception.BusinessException;
+import com.smartats.common.result.ResultCode;
 import com.smartats.module.webhook.dto.WebhookCreateRequest;
 import com.smartats.module.webhook.dto.WebhookPayload;
 import com.smartats.module.webhook.dto.WebhookResponse;
@@ -21,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -47,11 +48,6 @@ public class WebhookService {
             .build();
 
     /**
-     * 失败计数器（用于自动禁用失败的 Webhook）
-     */
-    private static final Map<Long, Integer> failureCounters = new ConcurrentHashMap<>();
-
-    /**
      * 最大连续失败次数
      */
     private static final int MAX_FAILURES = 5;
@@ -64,7 +60,7 @@ public class WebhookService {
         // 验证事件类型
         for (String event : request.getEvents()) {
             if (WebhookEventType.fromCode(event) == null) {
-                throw new IllegalArgumentException("无效的事件类型: " + event);
+            throw new BusinessException(ResultCode.BAD_REQUEST, "无效的事件类型: " + event);
             }
         }
 
@@ -117,8 +113,6 @@ public class WebhookService {
         if (deleted > 0) {
             log.info("删除 Webhook 配置: userId={}, webhookId={}", userId, webhookId);
         }
-
-        failureCounters.remove(webhookId);
     }
 
     /**
@@ -224,8 +218,6 @@ public class WebhookService {
         webhook.setLastSuccessAt(LocalDateTime.now());
         webhookConfigMapper.updateById(webhook);
 
-        failureCounters.put(webhook.getId(), 0);
-
         // 记录日志
         WebhookLog webhookLog = new WebhookLog();
         webhookLog.setWebhookId(webhook.getId());
@@ -262,7 +254,6 @@ public class WebhookService {
         }
 
         webhookConfigMapper.updateById(webhook);
-        failureCounters.put(webhook.getId(), newFailureCount);
 
         // 记录日志
         WebhookLog webhookLog = new WebhookLog();
@@ -315,7 +306,7 @@ public class WebhookService {
             // HMAC-SHA256 签名
             return "sha256=" + SecureUtil.hmacSha256(secret).digestHex(json);
         } catch (Exception e) {
-            throw new RuntimeException("生成签名失败", e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "生成签名失败");
         }
     }
 
@@ -361,7 +352,7 @@ public class WebhookService {
         WebhookConfig config = webhookConfigMapper.selectOne(wrapper);
 
         if (config == null) {
-            throw new IllegalArgumentException("Webhook 不存在或无权限: webhookId=" + webhookId);
+            throw new BusinessException(ResultCode.NOT_FOUND, "Webhook 不存在或无权限: webhookId=" + webhookId);
         }
 
         // 构造测试数据

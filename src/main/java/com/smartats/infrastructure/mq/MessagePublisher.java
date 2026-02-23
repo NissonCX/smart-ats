@@ -1,5 +1,7 @@
 package com.smartats.infrastructure.mq;
 
+import com.smartats.common.exception.BusinessException;
+import com.smartats.common.result.ResultCode;
 import com.smartats.config.RabbitMQConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +30,7 @@ public class MessagePublisher {
 
         } catch (Exception e) {
             log.error("发送简历解析消息失败", e);
-            throw new RuntimeException("消息发送失败", e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR, "消息发送失败");
         }
     }
 }

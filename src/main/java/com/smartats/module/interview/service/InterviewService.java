@@ -26,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 面试记录服务
@@ -286,7 +288,7 @@ public class InterviewService {
     }
 
     /**
-     * 按申请 ID 查询所有面试轮次
+     * 按申请 ID 查询所有面试轮次（批量查询面试官避免 N+1）
      */
     public List<InterviewResponse> listByApplicationId(Long applicationId) {
         log.info("查询申请的面试记录：applicationId={}", applicationId);
@@ -296,8 +298,19 @@ public class InterviewService {
                 .orderByAsc(InterviewRecord::getRound);
 
         List<InterviewRecord> records = interviewRecordMapper.selectList(wrapper);
+        if (records.isEmpty()) {
+            return List.of();
+        }
+
+        // 批量查询所有面试官（避免 N+1）
+        Set<Long> interviewerIds = records.stream()
+                .map(InterviewRecord::getInterviewerId)
+                .collect(Collectors.toSet());
+        Map<Long, User> interviewerMap = userMapper.selectBatchIds(interviewerIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
         return records.stream()
-                .map(this::convertToResponse)
+                .map(record -> convertToResponseWithMap(record, interviewerMap))
                 .toList();
     }
 
@@ -306,9 +319,38 @@ public class InterviewService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 将实体转换为响应 DTO
+     * 将实体转换为响应 DTO（单条查询使用，关联查询面试官）
      */
     private InterviewResponse convertToResponse(InterviewRecord record) {
+        InterviewResponse response = buildBaseResponse(record);
+
+        // 关联查询面试官姓名
+        User interviewer = userMapper.selectById(record.getInterviewerId());
+        if (interviewer != null) {
+            response.setInterviewerName(interviewer.getUsername());
+        }
+
+        return response;
+    }
+
+    /**
+     * 将实体转换为响应 DTO（使用预加载的面试官 Map，批量查询使用）
+     */
+    private InterviewResponse convertToResponseWithMap(InterviewRecord record, Map<Long, User> interviewerMap) {
+        InterviewResponse response = buildBaseResponse(record);
+
+        User interviewer = interviewerMap.get(record.getInterviewerId());
+        if (interviewer != null) {
+            response.setInterviewerName(interviewer.getUsername());
+        }
+
+        return response;
+    }
+
+    /**
+     * 构建基础响应对象（不含关联查询，复用于单条和批量转换）
+     */
+    private InterviewResponse buildBaseResponse(InterviewRecord record) {
         InterviewResponse response = new InterviewResponse();
         response.setId(record.getId());
         response.setApplicationId(record.getApplicationId());
@@ -326,13 +368,6 @@ public class InterviewService {
         response.setRecommendationDesc(getRecommendationDesc(record.getRecommendation()));
         response.setCreatedAt(record.getCreatedAt());
         response.setUpdatedAt(record.getUpdatedAt());
-
-        // 关联查询面试官姓名
-        User interviewer = userMapper.selectById(record.getInterviewerId());
-        if (interviewer != null) {
-            response.setInterviewerName(interviewer.getUsername());
-        }
-
         return response;
     }
 

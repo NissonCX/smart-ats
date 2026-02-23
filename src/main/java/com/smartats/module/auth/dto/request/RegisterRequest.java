@@ -24,8 +24,8 @@ public class RegisterRequest {
     @Email(message = "邮箱格式不正确")
     private String email;
 
-    @Pattern(regexp = "^(ADMIN|HR|INTERVIEWER)$", message = "角色只能是 ADMIN/HR/INTERVIEWER")
-    private String role;  // 可选，默认 HR
+    @Pattern(regexp = "^(HR|INTERVIEWER)$", message = "角色只能是 HR/INTERVIEWER")
+    private String role;  // 可选，默认 HR（ADMIN 角色禁止自行注册）
 
     /**
      * 邮箱验证码

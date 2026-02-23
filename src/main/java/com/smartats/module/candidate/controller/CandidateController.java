@@ -2,13 +2,16 @@ package com.smartats.module.candidate.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.Result;
+import com.smartats.common.result.ResultCode;
 import com.smartats.common.util.DataMaskUtil;
 import com.smartats.module.candidate.dto.CandidateQueryRequest;
 import com.smartats.module.candidate.dto.CandidateResponse;
 import com.smartats.module.candidate.dto.CandidateUpdateRequest;
 import com.smartats.module.candidate.entity.Candidate;
 import com.smartats.module.candidate.service.CandidateService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -34,7 +37,7 @@ public class CandidateController {
 
         Candidate candidate = candidateService.getByResumeId(resumeId);
         if (candidate == null) {
-            return Result.error(404, "候选人不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "候选人不存在");
         }
 
         CandidateResponse response = toResponse(candidate);
@@ -50,7 +53,7 @@ public class CandidateController {
 
         Candidate candidate = candidateService.getById(id);
         if (candidate == null) {
-            return Result.error(404, "候选人不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "候选人不存在");
         }
 
         CandidateResponse response = toResponse(candidate);
@@ -58,66 +61,15 @@ public class CandidateController {
     }
 
     /**
-     * 更新候选人信息
+     * 更新候选人信息（更新逻辑下沉到 Service 层）
      */
     @PutMapping("/{id}")
     public Result<CandidateResponse> updateCandidate(
             @PathVariable Long id,
-            @RequestBody CandidateUpdateRequest request) {
-        log.info("更新候选人信息: id={}, request={}", id, request);
+            @Valid @RequestBody CandidateUpdateRequest request) {
+        log.info("更新候选人信息: id={}", id);
 
-        Candidate candidate = candidateService.getById(id);
-        if (candidate == null) {
-            return Result.error(404, "候选人不存在");
-        }
-
-        // 更新字段
-        if (request.getName() != null) {
-            candidate.setName(request.getName());
-        }
-        if (request.getPhone() != null) {
-            candidate.setPhone(request.getPhone());
-        }
-        if (request.getEmail() != null) {
-            candidate.setEmail(request.getEmail());
-        }
-        if (request.getGender() != null) {
-            candidate.setGender(request.getGender());
-        }
-        if (request.getAge() != null) {
-            candidate.setAge(request.getAge());
-        }
-        if (request.getEducation() != null) {
-            candidate.setEducation(request.getEducation());
-        }
-        if (request.getSchool() != null) {
-            candidate.setSchool(request.getSchool());
-        }
-        if (request.getMajor() != null) {
-            candidate.setMajor(request.getMajor());
-        }
-        if (request.getGraduationYear() != null) {
-            candidate.setGraduationYear(request.getGraduationYear());
-        }
-        if (request.getWorkYears() != null) {
-            candidate.setWorkYears(request.getWorkYears());
-        }
-        if (request.getCurrentCompany() != null) {
-            candidate.setCurrentCompany(request.getCurrentCompany());
-        }
-        if (request.getCurrentPosition() != null) {
-            candidate.setCurrentPosition(request.getCurrentPosition());
-        }
-        if (request.getSkills() != null) {
-            candidate.setSkills(request.getSkills());
-        }
-        if (request.getSelfEvaluation() != null) {
-            candidate.setSelfEvaluation(request.getSelfEvaluation());
-        }
-
-        // 保存更新
-        Candidate updated = candidateService.saveManual(candidate);
-
+        Candidate updated = candidateService.updateManual(id, request);
         CandidateResponse response = toResponse(updated);
         return Result.success(response);
     }
@@ -128,10 +80,12 @@ public class CandidateController {
     @DeleteMapping("/{id}")
     public Result<Void> deleteCandidate(@PathVariable Long id) {
         log.info("删除候选人: id={}", id);
+
         Candidate candidate = candidateService.getById(id);
         if (candidate == null) {
-            return Result.error(404, "候选人不存在");
+            throw new BusinessException(ResultCode.NOT_FOUND, "候选人不存在");
         }
+
         candidateService.deleteById(id);
         return Result.success(null);
     }
