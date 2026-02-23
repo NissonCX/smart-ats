@@ -27,8 +27,26 @@ public enum ResultCode {
     RESUME_NOT_FOUND(20001, "简历不存在"), RESUME_ALREADY_PARSED(20002, "简历已解析，请勿重复提交"), FILE_TYPE_NOT_SUPPORTED(20003, "不支持的文件类型"), FILE_SIZE_EXCEEDED(20004, "文件大小超限"), RESUME_DUPLICATE(20005, "简历文件已存在"),
 
     // ========== AI 相关错误 30xxx ==========
-    AI_QUOTA_EXCEEDED(30001, "AI调用次数超限"), AI_PARSE_FAILED(30002, "简历解析失败"), // ========== 验证码相关错误 11xxx ==========
-    VERIFICATION_CODE_SEND_TOO_FREQUENT(11001, "验证码发送过于频繁，请稍后再试"), VERIFICATION_CODE_SEND_FAILED(11002, "验证码发送失败，请稍后重试"), VERIFICATION_CODE_INVALID(11003, "验证码错误或已过期"), VERIFICATION_CODE_REQUIRED(11004, "请先获取验证码");
+    AI_QUOTA_EXCEEDED(30001, "AI调用次数超限"),
+    AI_PARSE_FAILED(30002, "简历解析失败"),
+
+    // ========== 验证码相关错误 11xxx ==========
+    VERIFICATION_CODE_SEND_TOO_FREQUENT(11001, "验证码发送过于频繁，请稍后再试"),
+    VERIFICATION_CODE_SEND_FAILED(11002, "验证码发送失败，请稍后重试"),
+    VERIFICATION_CODE_INVALID(11003, "验证码错误或已过期"),
+    VERIFICATION_CODE_REQUIRED(11004, "请先获取验证码"),
+
+    // ========== 职位申请模块错误 42xxx ==========
+    APPLICATION_NOT_FOUND(42001, "申请记录不存在"),
+    APPLICATION_DUPLICATE(42002, "该候选人已申请此职位"),
+    APPLICATION_STATUS_INVALID(42003, "申请状态流转不合法"),
+    APPLICATION_JOB_NOT_PUBLISHED(42004, "职位未发布，无法申请"),
+
+    // ========== 面试模块错误 43xxx ==========
+    INTERVIEW_NOT_FOUND(43001, "面试记录不存在"),
+    INTERVIEW_ALREADY_COMPLETED(43002, "面试已完成，无法修改"),
+    INTERVIEW_ALREADY_CANCELLED(43003, "面试已取消"),
+    INTERVIEW_TIME_CONFLICT(43004, "面试时间冲突");
     /**
      * 错误码
      */

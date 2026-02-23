@@ -39,17 +39,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/send-verification-code").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()
 
-                        // Webhook 接口：允许外部调用
-                        .requestMatchers(HttpMethod.POST, "/webhooks/**").permitAll()
-
-                        // 职位接口：允许匿名访问
+                        // 职位接口：GET 允许匿名浏览
                         .requestMatchers(HttpMethod.GET, "/jobs/**").permitAll()
 
-                        // 简历上传接口：需要认证（需要 JWT Token）
-                        // 注意：这里不需要显式配置，因为 anyRequest().authenticated() 已经覆盖
-                        // 但为了清晰，我们可以显式声明
-
-                        // 其他所有接口：需要认证
+                        // 其他所有接口（Webhook管理、申请管理、面试管理等）：需要认证
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

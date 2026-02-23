@@ -113,3 +113,4 @@ POST
 PATCH
 DELETE
 PUT
+docs/*.pdf

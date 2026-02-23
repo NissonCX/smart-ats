@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              http://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <!-- 本地仓库路径 -->
+    <localRepository>${user.home}/.m2/repository</localRepository>
+
+    <!-- 镜像配置：Spring AI 相关依赖不走阿里云镜像 -->
+    <mirrors>
+        <!-- 阿里云镜像（排除 Spring AI） -->
+        <mirror>
+            <id>aliyunmaven</id>
+            <name>阿里云公共仓库</name>
+            <url>https://maven.aliyun.com/repository/public</url>
+            <mirrorOf>*,!spring-milestones,!spring-releases</mirrorOf>
+        </mirror>
+
+        <!-- Spring Milestone 镜像（直接访问） -->
+        <mirror>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <mirrorOf>spring-milestones</mirrorOf>
+        </mirror>
+    </mirrors>
+
+    <!-- profiles -->
+    <profiles>
+        <profile>
+            <id>spring-ai</id>
+            <repositories>
+                <repository>
+                    <id>spring-milestones</id>
+                    <name>Spring Milestones</name>
+                    <url>https://repo.spring.io/milestone</url>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </repository>
+            </repositories>
+        </profile>
+    </profiles>
+
+    <!-- 激活 profile -->
+    <activeProfiles>
+        <activeProfile>spring-ai</activeProfile>
+    </activeProfiles>
+</settings>

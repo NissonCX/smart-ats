@@ -1,20 +1,22 @@
 package com.smartats.module.webhook.controller;
 
 import com.smartats.common.result.Result;
-import com.smartats.module.auth.util.JwtUtil;
 import com.smartats.module.webhook.dto.WebhookCreateRequest;
 import com.smartats.module.webhook.dto.WebhookResponse;
 import com.smartats.module.webhook.service.WebhookService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
  * Webhook 管理接口
+ * <p>
+ * 统一通过 Spring Security 的 Authentication.getPrincipal() 获取 userId，
+ * 与其他 Controller（JobController、CandidateController）保持一致。
  */
 @Slf4j
 @RestController
@@ -23,7 +25,6 @@ import java.util.List;
 public class WebhookController {
 
     private final WebhookService webhookService;
-    private final JwtUtil jwtUtil;
 
     /**
      * 创建 Webhook 配置
@@ -32,9 +33,8 @@ public class WebhookController {
     @PostMapping
     public Result<WebhookResponse> createWebhook(
             @Valid @RequestBody WebhookCreateRequest request,
-            HttpServletRequest httpRequest) {
-        // 从 JWT 中获取用户 ID
-        Long userId = jwtUtil.getUserIdFromToken(httpRequest);
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
 
         WebhookResponse response = webhookService.createWebhook(userId, request);
 
@@ -48,8 +48,8 @@ public class WebhookController {
      * GET /api/v1/webhooks
      */
     @GetMapping
-    public Result<List<WebhookResponse>> getWebhooks(HttpServletRequest httpRequest) {
-        Long userId = jwtUtil.getUserIdFromToken(httpRequest);
+    public Result<List<WebhookResponse>> getWebhooks(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
 
         List<WebhookResponse> webhooks = webhookService.getUserWebhooks(userId);
 
@@ -63,8 +63,8 @@ public class WebhookController {
     @DeleteMapping("/{id}")
     public Result<Void> deleteWebhook(
             @PathVariable Long id,
-            HttpServletRequest httpRequest) {
-        Long userId = jwtUtil.getUserIdFromToken(httpRequest);
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
 
         webhookService.deleteWebhook(userId, id);
 
@@ -80,8 +80,8 @@ public class WebhookController {
     @PostMapping("/{id}/test")
     public Result<Boolean> testWebhook(
             @PathVariable Long id,
-            HttpServletRequest httpRequest) {
-        Long userId = jwtUtil.getUserIdFromToken(httpRequest);
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
 
         boolean success = webhookService.testWebhook(userId, id);
 

@@ -138,6 +138,30 @@ public class RedisKeyConstants {
     public static final String CACHE_CANDIDATE_KEY_PREFIX = "cache:candidate:";
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 职位申请缓存相关
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 职位申请详情缓存 Key 前缀
+     * 完整格式：cache:application:{applicationId}
+     * Value：JSON 格式的申请详情
+     * TTL：30分钟
+     */
+    public static final String CACHE_APPLICATION_KEY_PREFIX = "cache:application:";
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 面试记录缓存相关
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 面试记录详情缓存 Key 前缀
+     * 完整格式：cache:interview:{interviewId}
+     * Value：JSON 格式的面试记录详情
+     * TTL：30分钟
+     */
+    public static final String CACHE_INTERVIEW_KEY_PREFIX = "cache:interview:";
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 角色前缀
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
