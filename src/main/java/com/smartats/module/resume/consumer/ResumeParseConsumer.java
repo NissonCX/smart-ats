@@ -144,6 +144,9 @@ public class ResumeParseConsumer {
         } catch (InterruptedException e) {
             log.error("简历解析被中断: taskId={}", taskId, e);
             handleFailedTask(taskId, "解析被中断");
+            // 删除幂等标记，允许重试消息被正常消费
+            redisTemplate.delete(idempotentKey);
+            updateResumeStatusToFailed(resumeId, "解析被中断");
             retryOrReject(channel, deliveryTag, message);
 
             // 恢复中断状态
@@ -152,10 +155,18 @@ public class ResumeParseConsumer {
         } catch (Exception e) {
             log.error("简历解析失败: taskId={}", taskId, e);
             handleFailedTask(taskId, "解析失败: " + e.getMessage());
+            // 删除幂等标记，允许重试消息被正常消费
+            redisTemplate.delete(idempotentKey);
 
-            // 获取简历信息用于 Webhook
+            // 获取简历信息用于 Webhook 和更新DB状态
             Resume resume = resumeMapper.selectById(resumeId);
             if (resume != null) {
+                // 更新数据库中简历状态为 FAILED
+                resume.setStatus(ResumeStatus.FAILED.getCode());
+                resume.setErrorMessage(e.getMessage());
+                resumeMapper.updateById(resume);
+                log.info("已更新简历数据库状态为 FAILED: resumeId={}", resumeId);
+
                 triggerWebhookEvent(WebhookEventType.RESUME_PARSE_FAILED, resume, taskId, e.getMessage(), null);
             }
 
@@ -232,23 +243,59 @@ public class ResumeParseConsumer {
     }
 
     /**
-     * 重试或拒绝消息
+     * 更新简历数据库状态为 FAILED（用于中断场景无法获取 resume 对象时）
+     */
+    private void updateResumeStatusToFailed(Long resumeId, String errorMessage) {
+        try {
+            Resume resume = resumeMapper.selectById(resumeId);
+            if (resume != null) {
+                resume.setStatus(ResumeStatus.FAILED.getCode());
+                resume.setErrorMessage(errorMessage);
+                resumeMapper.updateById(resume);
+                log.info("已更新简历数据库状态为 FAILED: resumeId={}", resumeId);
+            }
+        } catch (Exception e) {
+            log.error("更新简历数据库状态失败: resumeId={}", resumeId, e);
+        }
+    }
+
+    /**
+     * 计算指数退避延迟时间（毫秒）
+     * retry 1: 10秒, retry 2: 30秒, retry 3: 60秒
+     */
+    private long getRetryDelay(int retryCount) {
+        return switch (retryCount) {
+            case 0 -> 10_000L;   // 第1次重试: 10秒
+            case 1 -> 30_000L;   // 第2次重试: 30秒
+            case 2 -> 60_000L;   // 第3次重试: 60秒
+            default -> 60_000L;
+        };
+    }
+
+    /**
+     * 重试或拒绝消息（使用延迟队列实现指数退避）
      */
     private void retryOrReject(Channel channel, long deliveryTag, ResumeParseMessage message) throws IOException {
         int retryCount = message.getRetryCount() == null ? 0 : message.getRetryCount();
 
         if (retryCount < 3) {
-            // 重新发布消息到队列，递增重试计数（避免 basicNack requeue 导致无限循环）
-            log.info("消息重试: retryCount={}, 即将发送第 {} 次重试", retryCount, retryCount + 1);
+            // 删除幂等标记，确保重试消息不被跳过
+            String idempotentKey = "idempotent:resume:" + message.getResumeId();
+            redisTemplate.delete(idempotentKey);
+
+            long delay = getRetryDelay(retryCount);
+            log.info("消息重试: retryCount={}, 即将发送第 {} 次重试, 延迟 {}秒", retryCount, retryCount + 1, delay / 1000);
             message.setRetryCount(retryCount + 1);
             try {
-                // 通过 MessagePublisher 重新发送（带递增的 retryCount）
+                // 发送到延迟队列，设置 per-message TTL 实现指数退避
+                // 消息过期后会通过 DLX 自动路由回主队列 resume.parse.queue
                 String json = objectMapper.writeValueAsString(message);
                 channel.basicPublish(
-                        com.smartats.config.RabbitMQConfig.RESUME_EXCHANGE,
-                        com.smartats.config.RabbitMQConfig.RESUME_PARSE_ROUTING_KEY,
+                        RabbitMQConfig.RESUME_EXCHANGE,
+                        RabbitMQConfig.RESUME_PARSE_DELAY_ROUTING_KEY,
                         new com.rabbitmq.client.AMQP.BasicProperties.Builder()
                                 .contentType("application/json")
+                                .expiration(String.valueOf(delay))  // per-message TTL（毫秒）
                                 .build(),
                         json.getBytes(java.nio.charset.StandardCharsets.UTF_8)
                 );

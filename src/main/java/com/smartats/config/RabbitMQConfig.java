@@ -23,6 +23,10 @@ public class RabbitMQConfig {
     // 死信交换机
     public static final String DEAD_LETTER_EXCHANGE = "smartats.dlx";
 
+    // 延迟重试队列（消息过期后自动路由回主队列）
+    public static final String RESUME_PARSE_DELAY_QUEUE = "resume.parse.delay";
+    public static final String RESUME_PARSE_DELAY_ROUTING_KEY = "resume.parse.delay";
+
     // 路由键
     public static final String RESUME_PARSE_ROUTING_KEY = "resume.parse";
     public static final String DEAD_LETTER_ROUTING_KEY = "resume.parse.dlq";
@@ -74,6 +78,17 @@ public class RabbitMQConfig {
     }
 
     /**
+     * 延迟重试队列（消息 TTL 过期后通过 DLX 路由回主队列，实现指数退避）
+     */
+    @Bean
+    public Queue resumeParseDelayQueue() {
+        return QueueBuilder.durable(RESUME_PARSE_DELAY_QUEUE)
+                .withArgument("x-dead-letter-exchange", RESUME_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", RESUME_PARSE_ROUTING_KEY)
+                .build();
+    }
+
+    /**
      * 死信队列
      */
     @Bean
@@ -90,6 +105,17 @@ public class RabbitMQConfig {
                 .bind(resumeParseQueue())
                 .to(resumeExchange())
                 .with(RESUME_PARSE_ROUTING_KEY);
+    }
+
+    /**
+     * 绑定延迟重试队列到主交换机
+     */
+    @Bean
+    public Binding delayQueueBinding() {
+        return BindingBuilder
+                .bind(resumeParseDelayQueue())
+                .to(resumeExchange())
+                .with(RESUME_PARSE_DELAY_ROUTING_KEY);
     }
 
     /**
