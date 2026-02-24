@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Table,
   Card,
@@ -61,11 +61,7 @@ export default function ApplicationsPage() {
     {} as Record<string, number>
   );
 
-  useEffect(() => {
-    loadApplications();
-  }, [query]);
-
-  const loadApplications = async () => {
+  const loadApplications = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await applicationApi.list(query);
@@ -74,7 +70,11 @@ export default function ApplicationsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query]);
+
+  useEffect(() => {
+    loadApplications();
+  }, [loadApplications]);
 
   const handleCreate = async () => {
     const values = await form.validateFields();

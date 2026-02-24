@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Table,
   Card,
@@ -42,11 +42,7 @@ export default function CandidatesPage() {
   const [editModal, setEditModal] = useState<CandidateResponse | null>(null);
   const [form] = Form.useForm();
 
-  useEffect(() => {
-    loadCandidates();
-  }, [query]);
-
-  const loadCandidates = async () => {
+  const loadCandidates = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await candidateApi.list(query);
@@ -55,7 +51,11 @@ export default function CandidatesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query]);
+
+  useEffect(() => {
+    loadCandidates();
+  }, [loadCandidates]);
 
   const handleEdit = (record: CandidateResponse) => {
     setEditModal(record);

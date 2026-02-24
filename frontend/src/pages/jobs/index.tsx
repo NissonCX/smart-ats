@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Table,
   Button,
@@ -49,11 +49,7 @@ export default function JobsPage() {
   const [detailDrawer, setDetailDrawer] = useState<JobResponse | null>(null);
   const [form] = Form.useForm();
 
-  useEffect(() => {
-    loadJobs();
-  }, [query]);
-
-  const loadJobs = async () => {
+  const loadJobs = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await jobApi.list(query);
@@ -62,7 +58,11 @@ export default function JobsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query]);
+
+  useEffect(() => {
+    loadJobs();
+  }, [loadJobs]);
 
   const handleCreate = () => {
     setEditingJob(null);

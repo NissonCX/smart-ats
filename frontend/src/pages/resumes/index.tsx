@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Table,
   Button,
@@ -66,9 +66,20 @@ export default function ResumesPage() {
   const [uploading, setUploading] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const loadResumes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await resumeApi.list({ page: pageNum, size: pageSize });
+      setResumes(data.data?.records || []);
+      setTotal(data.data?.total || 0);
+    } finally {
+      setLoading(false);
+    }
+  }, [pageNum, pageSize]);
+
   useEffect(() => {
     loadResumes();
-  }, [pageNum, pageSize]);
+  }, [loadResumes]);
 
   useEffect(() => {
     // 轮询解析状态
@@ -108,18 +119,7 @@ export default function ResumesPage() {
         pollingRef.current = null;
       }
     };
-  }, [tasks]);
-
-  const loadResumes = async () => {
-    setLoading(true);
-    try {
-      const { data } = await resumeApi.list({ page: pageNum, size: pageSize });
-      setResumes(data.data?.records || []);
-      setTotal(data.data?.total || 0);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [tasks, loadResumes]);
 
   const handleUpload = async (fileList: UploadFile[]) => {
     if (fileList.length === 0) return;
@@ -156,8 +156,8 @@ export default function ResumesPage() {
           }
         }
       }
-    } catch (err: any) {
-      message.error(err?.message || '上传失败');
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : '上传失败');
     } finally {
       setUploading(false);
     }
