@@ -1,5 +1,6 @@
 package com.smartats.module.interview.controller;
 
+import com.smartats.common.annotation.AuditLog;
 import com.smartats.common.result.Result;
 import com.smartats.module.interview.dto.InterviewResponse;
 import com.smartats.module.interview.dto.ScheduleInterviewRequest;
@@ -29,6 +30,7 @@ public class InterviewController {
      * POST /api/v1/interviews
      */
     @Operation(summary = "安排面试", description = "关联职位申请，触发 Webhook 通知")
+    @AuditLog(module = "面试管理", operation = "SCHEDULE", description = "安排面试")
     @PostMapping
     public Result<Long> scheduleInterview(
             @Valid @RequestBody ScheduleInterviewRequest request,
@@ -45,6 +47,7 @@ public class InterviewController {
      * PUT /api/v1/interviews/{id}/feedback
      */
     @Operation(summary = "提交面试反馈", description = "包含评分、推荐意见、评价内容")
+    @AuditLog(module = "面试管理", operation = "FEEDBACK", description = "提交面试反馈")
     @PutMapping("/{id}/feedback")
     public Result<Void> submitFeedback(
             @PathVariable Long id,
@@ -62,6 +65,7 @@ public class InterviewController {
      * POST /api/v1/interviews/{id}/cancel
      */
     @Operation(summary = "取消面试")
+    @AuditLog(module = "面试管理", operation = "CANCEL", description = "取消面试")
     @PostMapping("/{id}/cancel")
     public Result<Void> cancelInterview(
             @PathVariable Long id,

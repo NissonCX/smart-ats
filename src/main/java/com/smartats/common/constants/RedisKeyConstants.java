@@ -206,6 +206,21 @@ public class RedisKeyConstants {
     public static final String CACHE_INTERVIEW_KEY_PREFIX = "cache:interview:";
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 招聘分析缓存相关
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 招聘分析总览缓存 Key 前缀
+     * <p>
+     * 完整格式：cache:analytics:overview:{jobId}:{startDate}:{endDate}
+     * <p>
+     * Value：JSON 格式的 RecruitmentOverviewDTO
+     * <p>
+     * TTL：5分钟
+     */
+    public static final String CACHE_ANALYTICS_KEY_PREFIX = "cache:analytics:overview:";
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 角色前缀
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

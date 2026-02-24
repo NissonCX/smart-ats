@@ -14,6 +14,7 @@ import com.smartats.module.candidate.mapper.CandidateMapper;
 import com.smartats.module.job.entity.Job;
 import com.smartats.module.job.mapper.JobMapper;
 import com.smartats.module.webhook.service.WebhookService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -56,6 +57,10 @@ class JobApplicationServiceTest {
     private ValueOperations<String, String> valueOperations;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private MatchScoreService matchScoreService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private Job publishedJob;
     private Candidate mockCandidate;

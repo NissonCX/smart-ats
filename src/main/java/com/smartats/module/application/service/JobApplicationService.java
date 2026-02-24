@@ -17,10 +17,12 @@ import com.smartats.module.candidate.entity.Candidate;
 import com.smartats.module.candidate.mapper.CandidateMapper;
 import com.smartats.module.job.entity.Job;
 import com.smartats.module.job.mapper.JobMapper;
+import com.smartats.module.analytics.event.AnalyticsUpdateEvent;
 import com.smartats.module.webhook.enums.WebhookEventType;
 import com.smartats.module.webhook.service.WebhookService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +55,8 @@ public class JobApplicationService {
     private final WebhookService webhookService;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final MatchScoreService matchScoreService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 缓存 TTL（分钟） */
     private static final long CACHE_TTL_MINUTES = 30;
@@ -120,6 +124,14 @@ public class JobApplicationService {
         eventData.put("status", ApplicationStatus.PENDING.getCode());
         webhookService.sendEvent(WebhookEventType.APPLICATION_SUBMITTED, eventData);
 
+        // ⑥ 异步计算 AI 匹配分数（不阻塞创建流程）
+        matchScoreService.calculateAndSaveAsync(application.getId());
+
+        // ⑦ 发布分析更新事件（SSE 推送）
+        eventPublisher.publishEvent(new AnalyticsUpdateEvent(this,
+                "APPLICATION_CREATED",
+                String.format("新申请：%s 投递 %s", candidate.getName(), job.getTitle())));
+
         return application.getId();
     }
 
@@ -177,6 +189,11 @@ public class JobApplicationService {
         eventData.put("currentStatus", targetStatus);
         eventData.put("hrNotes", application.getHrNotes());
         webhookService.sendEvent(WebhookEventType.APPLICATION_STATUS_CHANGED, eventData);
+
+        // 发布分析更新事件（SSE 推送）
+        eventPublisher.publishEvent(new AnalyticsUpdateEvent(this,
+                "STATUS_CHANGED",
+                String.format("申请 #%d 状态变更：%s → %s", id, currentStatus, targetStatus)));
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

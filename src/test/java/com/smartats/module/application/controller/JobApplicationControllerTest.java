@@ -7,6 +7,7 @@ import com.smartats.common.result.ResultCode;
 import com.smartats.config.SecurityConfig;
 import com.smartats.module.application.dto.*;
 import com.smartats.module.application.service.JobApplicationService;
+import com.smartats.module.application.service.MatchScoreService;
 import com.smartats.module.auth.filter.JwtAuthenticationFilter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +56,9 @@ class JobApplicationControllerTest {
 
     @MockBean
     private JobApplicationService jobApplicationService;
+
+    @MockBean
+    private MatchScoreService matchScoreService;
 
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;

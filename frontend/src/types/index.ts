@@ -385,3 +385,84 @@ export const WEBHOOK_EVENTS = [
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENTS)[number];
+
+// ==================== Audit 审计日志 ====================
+
+export interface AuditLogQueryRequest {
+  userId?: number;
+  module?: string;
+  operation?: string;
+  status?: 'SUCCESS' | 'FAILED';
+  keyword?: string;
+  startTime?: string;       // yyyy-MM-dd HH:mm:ss
+  endTime?: string;         // yyyy-MM-dd HH:mm:ss
+  pageNum?: number;
+  pageSize?: number;
+}
+
+export interface AuditLogResponse {
+  id: number;
+  userId: number;
+  username: string;
+  module: string;
+  operation: string;
+  description: string;
+  method: string;
+  requestUrl: string;
+  requestMethod: string;
+  requestParams: string;
+  requestIp: string;
+  status: 'SUCCESS' | 'FAILED';
+  errorMessage: string | null;
+  duration: number;          // 执行耗时 ms
+  createdAt: string;
+}
+
+// ==================== Analytics 招聘分析 ====================
+
+export interface AnalyticsQueryRequest {
+  jobId?: number;
+  startDate?: string;        // yyyy-MM-dd
+  endDate?: string;          // yyyy-MM-dd
+}
+
+export interface FunnelStageDTO {
+  stage: string;             // 阶段编码 (ApplicationStatus)
+  stageLabel: string;        // 阶段中文名称
+  count: number;
+  percentage: number;        // 0-100.0
+  conversionRate: number;    // 0-100.0
+}
+
+export interface RecruitmentOverviewDTO {
+  totalApplications: number;
+  totalCandidates: number;
+  totalJobs: number;
+  openJobs: number;
+  interviewsScheduled: number;
+  offersExtended: number;
+  offerRate: number;
+  avgMatchScore: number;     // 0-100
+  avgDaysToOffer: number | null;
+  funnel: FunnelStageDTO[];
+  applicationTrend: Record<string, number>;   // { "2026-01": 42, ... }
+}
+
+// ==================== Match Score AI 匹配打分 ====================
+
+export interface ScoreBreakdown {
+  semanticScore: number;     // 语义相似度 (权重 30%)
+  skillScore: number;        // 技能匹配   (权重 35%)
+  experienceScore: number;   // 经验匹配   (权重 20%)
+  educationScore: number;    // 学历匹配   (权重 15%)
+}
+
+export interface MatchScoreResponse {
+  applicationId: number;
+  jobId: number;
+  candidateId: number;
+  totalScore: number;
+  breakdown: ScoreBreakdown;
+  matchReasons: string[];
+  calculatedAt: string;
+}

@@ -33,4 +33,14 @@ public class TaskStatusResponse {
      * 进度百分比（0-100）
      */
     private Integer progress;
+
+    /**
+     * 当前重试次数（RETRYING 状态时有值）
+     */
+    private Integer retryCount;
+
+    /**
+     * 最大重试次数
+     */
+    private Integer maxRetries;
 }

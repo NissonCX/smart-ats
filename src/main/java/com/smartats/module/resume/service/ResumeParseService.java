@@ -85,7 +85,12 @@ public class ResumeParseService {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("智谱 AI 解析失败", e);
+            // 限流（429）错误仅记录警告（避免冗余堆栈），其他错误记录完整异常
+            if (isRateLimitError(e)) {
+                log.warn("智谱 AI 限流（429），将由 MQ 层重试: {}", e.getMessage());
+            } else {
+                log.error("智谱 AI 解析失败", e);
+            }
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "简历解析失败: " + e.getMessage());
         }
     }
@@ -166,5 +171,19 @@ public class ResumeParseService {
         }
 
         return content.trim();
+    }
+
+    /**
+     * 判断是否为 API 限流（429 Too Many Requests）错误
+     */
+    private boolean isRateLimitError(Exception e) {
+        return containsRateLimitKeyword(e.getMessage())
+                || (e.getCause() != null && containsRateLimitKeyword(e.getCause().getMessage()));
+    }
+
+    private boolean containsRateLimitKeyword(String message) {
+        if (message == null) return false;
+        String lower = message.toLowerCase();
+        return lower.contains("429") || lower.contains("rate limit") || lower.contains("too many requests");
     }
 }

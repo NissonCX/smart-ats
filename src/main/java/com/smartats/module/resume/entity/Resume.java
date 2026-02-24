@@ -20,6 +20,8 @@ public class Resume {
     private String fileHash;
     private String fileType;
     private String status;  // PARSING, COMPLETED, FAILED
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)  // 允许更新为 null（清除错误信息）
     private String errorMessage;
 
     @TableField(fill = FieldFill.INSERT)

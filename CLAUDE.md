@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SmartATS** is an intelligent recruitment management system for HR professionals. The system enables resume uploads, AI-powered automatic parsing of structured information (via 智谱AI), full recruitment workflow management (applications, interviews), and Webhook event notifications.
 
-**Current State** (2026-02-24):
-- ✅ All 8 business modules implemented and functional (including vector search)
-- ✅ 40 API endpoints across auth, job, resume, candidate, application, interview, webhook, smart-search
+**Current State** (2026-02-25):
+- ✅ All 11 business modules implemented and functional (including vector search)
+- ✅ 47 API endpoints across auth, job, resume, candidate, application, interview, webhook, smart-search, audit, analytics
 - ✅ AI resume parsing complete (智谱AI via Spring AI OpenAI-compatible mode)
 - ✅ Async processing pipeline (RabbitMQ + Redisson distributed lock + retry + DLQ)
 - ✅ Redis caching with cache-aside pattern, delayed double-delete, atomic counters
@@ -16,9 +16,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ Spring Security with JWT + configurable CORS + role-based access
 - ✅ Milvus vector database + RAG semantic candidate search (embedding-3, 1024 dim)
 - ✅ Swagger/OpenAPI configured (SpringDoc 2.5.0, JWT Bearer scheme)
-- ✅ 190 unit/integration tests across 19 test classes (Service + Controller layers)
+- ✅ 193 unit/integration tests across 19 test classes (Service + Controller layers)
 - ✅ Environment profiles: dev / test / prod
 - ✅ Production deployment documentation
+- ✅ **NEW** 审计日志模块（AOP + Custom Annotation 自动采集）
+- ✅ **NEW** AI 智能匹配打分（多维度匹配：语义相似度30% + 技能匹配35% + 经验匹配20% + 学历匹配15%）
+- ✅ **NEW** 招聘漏斗分析 + SSE 实时推送
 
 **Overall Progress: 100%** (all TODOs resolved, production-ready)
 
@@ -42,7 +45,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Utilities | Hutool | 5.8.23 | ✅ |
 | Vector Database | Milvus | 2.4.17 (SDK 2.4.8) | ✅ Implemented |
 | API Docs | SpringDoc OpenAPI | 2.5.0 | ✅ Implemented |
-| Testing | JUnit 5 + Mockito + MockMvc | - | ✅ 190 tests |
+| AOP | Spring Boot Starter AOP | 3.2.5 | ✅ Audit Logging |
+| SSE | Spring MVC SseEmitter | 3.2.5 | ✅ Real-time Push |
+| Testing | JUnit 5 + Mockito + MockMvc | - | ✅ 193 tests |
 
 ## Development Environment Setup
 
@@ -80,6 +85,7 @@ mvn spring-boot:run
 ```bash
 mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < docker/mysql/init/01-init-database.sql
 mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < src/main/resources/db/webhook_tables.sql
+mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < src/main/resources/db/audit_logs.sql
 ```
 
 ### Environment Variables
@@ -100,7 +106,9 @@ JWT_SECRET=your_production_secret_key_minimum_32_characters
 ```
 src/main/java/com/smartats/
 ├── SmartAtsApplication.java
-├── common/                                 # Shared (8 files)
+├── common/                                 # Shared (10 files)
+│   ├── annotation/AuditLog.java            # Custom audit annotation
+│   ├── aspect/AuditLogAspect.java          # AOP Around advice for audit
 │   ├── constants/RedisKeyConstants.java    # All Redis key prefixes
 │   ├── exception/                          # BusinessException + GlobalExceptionHandler
 │   ├── handler/JsonTypeHandler.java        # MyBatis JSON type handler
@@ -120,14 +128,24 @@ src/main/java/com/smartats/
 │   ├── mq/MessagePublisher.java            # RabbitMQ message publishing
 │   ├── storage/                            # FileStorageService interface + MinIO impl
 │   └── vector/                             # EmbeddingService + VectorStoreService (Milvus)
-└── module/                                 # Business modules (8 modules, 75+ files)
-    ├── auth/          (12 files)           # ✅ 98% - Register, Login, JWT, Refresh, Verification
-    ├── job/           (10 files)           # ✅ 95% - CRUD, Cache, Hot Ranking, View Count Sync
-    ├── resume/        (11 files)           # ✅ 95% - Upload, Dedup, AI Parse, MQ Consumer
-    ├── candidate/     (12 files)           # ✅ 95% - CRUD, Filter, Cache, Masking, Vector
-    ├── application/   (8 files)            # ✅ 95% - Create, Status Flow, Multi-Query
-    ├── interview/     (7 files)            # ✅ 95% - Schedule, Feedback, Cancel, Query
-    └── webhook/       (10 files)           # ✅ 95% - CRUD, Test, 12 Event Types, HMAC Signing
+├── common/                                 # Shared (10 files)
+│   ├── annotation/AuditLog.java            # Custom audit annotation
+│   ├── aspect/AuditLogAspect.java          # AOP Around advice for audit
+│   ├── constants/RedisKeyConstants.java    # All Redis key prefixes
+│   ├── exception/                          # BusinessException + GlobalExceptionHandler
+│   ├── handler/JsonTypeHandler.java        # MyBatis JSON type handler
+│   ├── result/                             # Result<T> + ResultCode (error codes: 10xxx~43xxx)
+│   └── util/                               # FileValidationUtil + DataMaskUtil
+└── module/                                 # Business modules (11 modules, 90+ files)
+    ├── auth/          (12 files)           # ✅ Register, Login, JWT, Refresh, Verification
+    ├── job/           (10 files)           # ✅ CRUD, Cache, Hot Ranking, View Count Sync
+    ├── resume/        (11 files)           # ✅ Upload, Dedup, AI Parse, MQ Consumer
+    ├── candidate/     (12 files)           # ✅ CRUD, Filter, Cache, Masking, Vector
+    ├── application/   (11 files)           # ✅ Create, Status Flow, AI Match Score, Multi-Query
+    ├── interview/     (7 files)            # ✅ Schedule, Feedback, Cancel, Query
+    ├── webhook/       (10 files)           # ✅ CRUD, Test, 12 Event Types, HMAC Signing
+    ├── audit/         (5 files)            # ✅ NEW - AOP Audit Log (entity, mapper, service, controller, DTO)
+    └── analytics/     (7 files)            # ✅ NEW - Recruitment Funnel, SSE Push, Redis Cache
 ```
 
 ## Architecture Overview
@@ -140,6 +158,9 @@ src/main/java/com/smartats/
 4. **Recruitment Chain**: Create Application → Status Flow (PENDING→REVIEWING→INTERVIEW→OFFER/REJECTED) → Schedule Interview → Feedback
 5. **Webhook Chain**: Event Trigger → @Async Send → HMAC-SHA256 Signature → Retry → Log
 6. **Search Chain**: ✅ Query Embedding → Milvus ANN Search → Score Filter → MySQL Enrich → RAG Response
+7. **Audit Chain**: @AuditLog Annotation → AOP Intercept → Extract User/IP/Params → Mask Sensitive Fields → @Async DB Write
+8. **Match Score Chain**: Create Application → @Async Score Calculation (Semantic 30% + Skill 35% + Experience 20% + Education 15%) → Save Score + Reasons
+9. **Analytics Chain**: Aggregate SQL → Redis Cache (5min) → REST API → SSE Push (ApplicationEvent → EventListener → Broadcast)
 
 ### Async Processing Flow (Resume)
 
@@ -167,7 +188,7 @@ Redisson with Watchdog — used in `ResumeParseConsumer` for fileHash-level lock
 
 ## Database Schema
 
-### 8 Tables
+### 9 Tables
 
 | Table | Status | Notes |
 |-------|--------|-------|
@@ -179,6 +200,7 @@ Redisson with Watchdog — used in `ResumeParseConsumer` for fileHash-level lock
 | `interview_records` | ✅ | Interview records with rounds, scores, recommendations |
 | `webhook_configs` | ✅ | Webhook configuration with event types and secrets |
 | `webhook_logs` | ✅ | Webhook delivery logs |
+| `audit_logs` | ✅ | **NEW** Operation audit logs (user, module, operation, IP, duration) |
 
 ### Key Relationships
 
@@ -209,6 +231,7 @@ All key prefixes are centralized in `RedisKeyConstants.java`.
 | `cache:application:{appId}` | String | Application cache | 30min |
 | `cache:interview:{interviewId}` | String | Interview cache | 30min |
 | `rate:upload:{userId}` | String | Batch upload rate limit | 60s |
+| `cache:analytics:overview:{params}` | String | Analytics overview cache | 5min |
 
 ## RabbitMQ Topology
 
@@ -220,7 +243,7 @@ All key prefixes are centralized in `RedisKeyConstants.java`.
 - **Retry**: Republish with incremented retryCount (max 3), then NACK to DLQ
 - **Message**: JSON with `taskId`, `resumeId`, `filePath`, `fileHash`, `uploaderId`, `retryCount`
 
-## API Endpoints Summary (40 total)
+## API Endpoints Summary (47 total)
 
 ### Authentication — 5 endpoints
 | Method | Path | Auth | Description |
@@ -261,11 +284,12 @@ All key prefixes are centralized in `RedisKeyConstants.java`.
 | DELETE | `/api/v1/candidates/{id}` | ✅ | Delete candidate |
 | GET | `/api/v1/candidates` | ✅ | List (multi-filter + data masking) |
 
-### Applications — 6 endpoints
+### Applications — 7 endpoints
 | Method | Path | Auth | Description |
 |--------|------|:----:|-------------|
-| POST | `/api/v1/applications` | ✅ | Create application (dedup) |
+| POST | `/api/v1/applications` | ✅ | Create application (dedup + auto AI matching) |
 | PUT | `/api/v1/applications/{id}/status` | ✅ | Update status |
+| POST | `/api/v1/applications/{id}/match-score` | ✅ | **NEW** Recalculate AI match score |
 | GET | `/api/v1/applications/{id}` | ✅ | Get application detail |
 | GET | `/api/v1/applications/job/{jobId}` | ✅ | List by job |
 | GET | `/api/v1/applications/candidate/{candidateId}` | ✅ | List by candidate |
@@ -287,6 +311,18 @@ All key prefixes are centralized in `RedisKeyConstants.java`.
 | GET | `/api/v1/webhooks` | ✅ | List webhooks |
 | DELETE | `/api/v1/webhooks/{id}` | ✅ | Delete webhook |
 | POST | `/api/v1/webhooks/{id}/test` | ✅ | Test webhook |
+
+### Audit Logs — 1 endpoint
+| Method | Path | Auth | Description |
+|--------|------|:----:|-------------|
+| GET | `/api/v1/audit-logs` | ✅ | **NEW** Query audit logs (multi-filter, paginated) |
+
+### Analytics — 3 endpoints
+| Method | Path | Auth | Description |
+|--------|------|:----:|-------------|
+| GET | `/api/v1/analytics/overview` | ✅ | **NEW** Recruitment funnel + KPI overview (5min cache) |
+| GET | `/api/v1/analytics/stream` | ✅ | **NEW** SSE real-time push (30min timeout, 30s heartbeat) |
+| GET | `/api/v1/analytics/sse-status` | ✅ | **NEW** Active SSE connection count |
 
 ## Webhook Event Types (12)
 

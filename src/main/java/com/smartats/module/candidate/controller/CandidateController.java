@@ -2,6 +2,7 @@ package com.smartats.module.candidate.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.smartats.common.annotation.AuditLog;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.Result;
 import com.smartats.common.result.ResultCode;
@@ -69,6 +70,7 @@ public class CandidateController {
      * 更新候选人信息（更新逻辑下沉到 Service 层）
      */
     @Operation(summary = "更新候选人信息", description = "仅更新非 null 字段，异步重新向量化")
+    @AuditLog(module = "候选人管理", operation = "UPDATE", description = "更新候选人信息")
     @PutMapping("/{id}")
     public Result<CandidateResponse> updateCandidate(
             @PathVariable Long id,
@@ -84,6 +86,7 @@ public class CandidateController {
      * 删除候选人
      */
     @Operation(summary = "删除候选人", description = "同步删除 Milvus 向量 + MySQL 记录")
+    @AuditLog(module = "候选人管理", operation = "DELETE", description = "删除候选人")
     @DeleteMapping("/{id}")
     public Result<Void> deleteCandidate(@PathVariable Long id) {
         log.info("删除候选人: id={}", id);

@@ -125,7 +125,11 @@ class ResumeControllerTest {
         @Test
         @DisplayName("查询任务状态成功")
         void shouldReturnTaskStatus() throws Exception {
-            TaskStatusResponse response = new TaskStatusResponse("COMPLETED", 1L, 1L, null, 100);
+            TaskStatusResponse response = new TaskStatusResponse();
+            response.setStatus("COMPLETED");
+            response.setResumeId(1L);
+            response.setCandidateId(1L);
+            response.setProgress(100);
             given(resumeService.getTaskStatus("task-123")).willReturn(response);
 
             mockMvc.perform(get("/resumes/tasks/task-123")

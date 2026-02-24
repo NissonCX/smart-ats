@@ -129,8 +129,9 @@ public class ResumeParseConsumer {
             // 8. 更新任务状态为 COMPLETED
             updateTaskStatus(taskId, "COMPLETED", 100);
 
-            // 9. 更新简历状态
+            // 9. 更新简历状态（清除可能残留的错误信息）
             resume.setStatus(ResumeStatus.COMPLETED.getCode());
+            resume.setErrorMessage(null);
             resumeMapper.updateById(resume);
 
             log.info("简历解析完成: taskId={}, resumeId={}, candidateId={}", taskId, resumeId, candidate.getId());
@@ -142,32 +143,48 @@ public class ResumeParseConsumer {
             channel.basicAck(deliveryTag, false);
 
         } catch (InterruptedException e) {
-            log.error("简历解析被中断: taskId={}", taskId, e);
-            handleFailedTask(taskId, "解析被中断");
-            // 删除幂等标记，允许重试消息被正常消费
+            int retryCount = message.getRetryCount() == null ? 0 : message.getRetryCount();
             redisTemplate.delete(idempotentKey);
-            updateResumeStatusToFailed(resumeId, "解析被中断");
-            retryOrReject(channel, deliveryTag, message);
 
-            // 恢复中断状态
+            if (retryCount < 3) {
+                log.warn("简历解析被中断，准备第 {} 次重试: taskId={}", retryCount + 1, taskId);
+                updateRetryingStatus(taskId, retryCount + 1, 3,
+                        String.format("解析被中断，%d秒后第 %d 次重试", getRetryDelay(retryCount) / 1000, retryCount + 1));
+            } else {
+                log.error("简历解析被中断（重试已耗尽）: taskId={}", taskId, e);
+                handleFailedTask(taskId, "解析被中断（已重试3次）");
+                updateResumeStatusToFailed(resumeId, "解析被中断");
+            }
+
+            retryOrReject(channel, deliveryTag, message);
             Thread.currentThread().interrupt();
 
         } catch (Exception e) {
-            log.error("简历解析失败: taskId={}", taskId, e);
-            handleFailedTask(taskId, "解析失败: " + e.getMessage());
-            // 删除幂等标记，允许重试消息被正常消费
+            int retryCount = message.getRetryCount() == null ? 0 : message.getRetryCount();
             redisTemplate.delete(idempotentKey);
 
-            // 获取简历信息用于 Webhook 和更新DB状态
-            Resume resume = resumeMapper.selectById(resumeId);
-            if (resume != null) {
-                // 更新数据库中简历状态为 FAILED
-                resume.setStatus(ResumeStatus.FAILED.getCode());
-                resume.setErrorMessage(e.getMessage());
-                resumeMapper.updateById(resume);
-                log.info("已更新简历数据库状态为 FAILED: resumeId={}", resumeId);
+            if (retryCount < 3) {
+                // 还有重试机会 → 标记 RETRYING，不标记最终失败
+                long nextDelay = getRetryDelay(retryCount);
+                log.warn("简历解析失败，准备第 {} 次重试（{}秒后）: taskId={}, error={}",
+                        retryCount + 1, nextDelay / 1000, taskId, e.getMessage());
+                updateRetryingStatus(taskId, retryCount + 1, 3,
+                        String.format("第 %d 次尝试失败，%d秒后重试: %s",
+                                retryCount + 1, nextDelay / 1000, e.getMessage()));
+                // DB 保持 PARSING 状态，不更新为 FAILED；不触发失败 Webhook
+            } else {
+                // 重试已用尽 → 最终失败
+                log.error("简历解析最终失败（已重试3次）: taskId={}", taskId, e);
+                handleFailedTask(taskId, "解析失败（已重试3次）: " + e.getMessage());
 
-                triggerWebhookEvent(WebhookEventType.RESUME_PARSE_FAILED, resume, taskId, e.getMessage(), null);
+                Resume resume = resumeMapper.selectById(resumeId);
+                if (resume != null) {
+                    resume.setStatus(ResumeStatus.FAILED.getCode());
+                    resume.setErrorMessage(e.getMessage());
+                    resumeMapper.updateById(resume);
+                    log.info("已更新简历数据库状态为 FAILED: resumeId={}", resumeId);
+                    triggerWebhookEvent(WebhookEventType.RESUME_PARSE_FAILED, resume, taskId, e.getMessage(), null);
+                }
             }
 
             retryOrReject(channel, deliveryTag, message);
@@ -239,6 +256,27 @@ public class ResumeParseConsumer {
             updateTaskStatus(taskId, "FAILED", 0, errorMessage);
         } catch (Exception e) {
             log.error("更新失败任务状态异常: taskId={}", taskId, e);
+        }
+    }
+
+    /**
+     * 更新任务状态为 RETRYING（含重试信息）
+     */
+    private void updateRetryingStatus(String taskId, int retryCount, int maxRetries, String errorMessage) {
+        try {
+            String taskKey = TASK_STATUS_KEY_PREFIX + taskId;
+            TaskStatusResponse taskStatus = new TaskStatusResponse();
+            taskStatus.setStatus("RETRYING");
+            taskStatus.setProgress(0);
+            taskStatus.setErrorMessage(errorMessage);
+            taskStatus.setRetryCount(retryCount);
+            taskStatus.setMaxRetries(maxRetries);
+
+            String json = objectMapper.writeValueAsString(taskStatus);
+            redisTemplate.opsForValue().set(taskKey, json, 24, java.util.concurrent.TimeUnit.HOURS);
+            log.info("更新任务状态: taskId={}, status=RETRYING, retry={}/{}", taskId, retryCount, maxRetries);
+        } catch (Exception e) {
+            log.error("更新 RETRYING 状态失败: taskId={}", taskId, e);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.smartats.module.auth.controller;
 
+import com.smartats.common.annotation.AuditLog;
 import com.smartats.common.result.Result;
 import com.smartats.module.auth.dto.request.LoginRequest;
 import com.smartats.module.auth.dto.request.RefreshTokenRequest;
@@ -31,6 +32,7 @@ public class AuthController {
      * POST /api/v1/auth/register
      */
     @Operation(summary = "用户注册", description = "注册新用户，需要邮箱验证码，BCrypt 加密存储密码")
+    @AuditLog(module = "认证管理", operation = "REGISTER", description = "用户注册", saveParams = false)
     @PostMapping("/register")
     public Result<Void> register(@Valid @RequestBody RegisterRequest request) {
         userService.register(request);
@@ -42,6 +44,7 @@ public class AuthController {
      * POST /api/v1/auth/login
      */
     @Operation(summary = "用户登录", description = "返回 accessToken(2h) + refreshToken(7d)")
+    @AuditLog(module = "认证管理", operation = "LOGIN", description = "用户登录", saveParams = false)
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = userService.login(request);

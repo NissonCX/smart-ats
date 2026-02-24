@@ -1,6 +1,7 @@
 package com.smartats.module.resume.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.smartats.common.annotation.AuditLog;
 import com.smartats.common.result.Result;
 import com.smartats.module.resume.dto.BatchUploadResponse;
 import com.smartats.module.resume.dto.ResumeUploadResponse;
@@ -35,6 +36,7 @@ public class ResumeController {
      * @return 上传结果，包含 taskId 用于查询解析状态
      */
     @Operation(summary = "上传简历", description = "支持 PDF/DOC/DOCX，≤ 10MB，MD5 去重，异步 AI 解析")
+    @AuditLog(module = "简历管理", operation = "UPLOAD", description = "上传简历")
     @PostMapping("/upload")
     public Result<ResumeUploadResponse> uploadResume(
             @RequestParam("file") MultipartFile file,
@@ -59,6 +61,7 @@ public class ResumeController {
      * @return 批量上传结果，包含每个文件的处理状态
      */
     @Operation(summary = "批量上传简历", description = "支持最多 20 个文件，每分钟限 5 次，单个失败不影响其他")
+    @AuditLog(module = "简历管理", operation = "BATCH_UPLOAD", description = "批量上传简历")
     @PostMapping("/batch-upload")
     public Result<BatchUploadResponse> batchUploadResumes(
             @RequestParam("files") MultipartFile[] files,

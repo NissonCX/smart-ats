@@ -9,9 +9,13 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
+
+import java.time.Duration;
 
 /**
  * 智谱 AI 配置（使用 OpenAI 兼容模式）
@@ -45,15 +49,26 @@ public class ZhipuAiConfig {
 
     /**
      * 创建共享的 OpenAiApi 实例（Chat + Embedding 复用同一 API 客户端）
+     * <p>
+     * 设置合理的超时时间：AI 简历解析通常需要 15-45 秒，
+     * 默认超时太短会导致 "Request timed out" 错误。
      */
     @Bean
     public OpenAiApi openAiApi() {
+        // 配置 HTTP 超时：连接 30 秒，读取 120 秒（AI 生成内容耗时较长）
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(30));
+        requestFactory.setReadTimeout(Duration.ofSeconds(120));
+
+        RestClient.Builder restClientBuilder = RestClient.builder()
+                .requestFactory(requestFactory);
+
         return new OpenAiApi(
                 baseUrl,
                 apiKey,
                 "/chat/completions",
                 "/embeddings",
-                RestClient.builder(),
+                restClientBuilder,
                 WebClient.builder(),
                 new DefaultResponseErrorHandler()
         );
@@ -67,7 +82,13 @@ public class ZhipuAiConfig {
                 .withMaxTokens(4000)
                 .build();
 
-        return new OpenAiChatModel(openAiApi, options);
+        // 禁用 Spring AI 内部重试（默认 maxAttempts=10, exponentialBackoff 2s~180s）
+        // 我们在 MQ 消费层通过延迟队列实现更合理的指数退避重试（10s/30s/60s）
+        RetryTemplate noRetry = RetryTemplate.builder()
+                .maxAttempts(1)
+                .build();
+
+        return new OpenAiChatModel(openAiApi, options, null, noRetry);
     }
 
     /**
@@ -81,6 +102,7 @@ public class ZhipuAiConfig {
     public OpenAiEmbeddingModel openAiEmbeddingModel(OpenAiApi openAiApi) {
         OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
                 .withModel(embeddingModel)
+                .withDimensions(1024)  // embedding-3 默认 2048 维，指定 1024 与 Milvus schema 一致
                 .build();
 
         return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED, options);

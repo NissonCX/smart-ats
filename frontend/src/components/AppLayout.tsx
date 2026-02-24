@@ -15,6 +15,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   BellOutlined,
+  AuditOutlined,
+  FundOutlined,
 } from '@ant-design/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../store/auth';
@@ -67,6 +69,16 @@ const menuItems: MenuProps['items'] = [
     key: '/interviews',
     icon: <CalendarOutlined />,
     label: '面试管理',
+  },
+  {
+    key: '/analytics',
+    icon: <FundOutlined />,
+    label: '招聘分析',
+  },
+  {
+    key: '/audit-logs',
+    icon: <AuditOutlined />,
+    label: '审计日志',
   },
   {
     key: '/settings',

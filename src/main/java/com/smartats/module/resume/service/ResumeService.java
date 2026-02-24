@@ -183,7 +183,7 @@ public class ResumeService {
 
         // 2. Redis 没有，返回默认状态
         log.debug("任务状态不存在: taskId={}", taskId);
-        return new TaskStatusResponse("NOT_FOUND", null, null, null, 0);
+        return new TaskStatusResponse("NOT_FOUND", null, null, null, 0, null, null);
     }
 
     /**

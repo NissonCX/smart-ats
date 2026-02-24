@@ -6,6 +6,7 @@ import type {
   UpdateApplicationStatusRequest,
   ApplicationResponse,
   ApplicationQueryParams,
+  MatchScoreResponse,
 } from '../types';
 
 export const applicationApi = {
@@ -26,4 +27,7 @@ export const applicationApi = {
 
   list: (params?: ApplicationQueryParams) =>
     request.get<Result<Page<ApplicationResponse>>>('/applications', { params }),
+
+  calculateMatchScore: (id: number) =>
+    request.post<Result<MatchScoreResponse>>(`/applications/${id}/match-score`),
 };

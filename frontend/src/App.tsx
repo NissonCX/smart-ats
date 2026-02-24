@@ -18,6 +18,8 @@ const SmartSearchPage = lazy(() => import('./pages/candidates/search'));
 const ApplicationsPage = lazy(() => import('./pages/applications'));
 const InterviewsPage = lazy(() => import('./pages/interviews'));
 const SettingsPage = lazy(() => import('./pages/settings'));
+const AuditLogPage = lazy(() => import('./pages/audit'));
+const AnalyticsPage = lazy(() => import('./pages/analytics'));
 
 const PageLoading = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -43,6 +45,8 @@ export default function App() {
               <Route path="/candidates/search" element={<SmartSearchPage />} />
               <Route path="/applications" element={<ApplicationsPage />} />
               <Route path="/interviews" element={<InterviewsPage />} />
+              <Route path="/audit-logs" element={<AuditLogPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
 

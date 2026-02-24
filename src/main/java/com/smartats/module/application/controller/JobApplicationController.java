@@ -1,9 +1,11 @@
 package com.smartats.module.application.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.smartats.common.annotation.AuditLog;
 import com.smartats.common.result.Result;
 import com.smartats.module.application.dto.*;
 import com.smartats.module.application.service.JobApplicationService;
+import com.smartats.module.application.service.MatchScoreService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,12 +22,14 @@ import org.springframework.web.bind.annotation.*;
 public class JobApplicationController {
 
     private final JobApplicationService jobApplicationService;
+    private final MatchScoreService matchScoreService;
 
     /**
      * 创建职位申请
      * POST /api/v1/applications
      */
     @Operation(summary = "创建职位申请", description = "自动去重（同一候选人不能重复申请同一职位）")
+    @AuditLog(module = "职位申请", operation = "CREATE", description = "创建职位申请")
     @PostMapping
     public Result<Long> createApplication(
             @Valid @RequestBody CreateApplicationRequest request,
@@ -43,6 +47,7 @@ public class JobApplicationController {
      * PUT /api/v1/applications/{id}/status
      */
     @Operation(summary = "更新申请状态", description = "状态流转校验，触发 Webhook 通知")
+    @AuditLog(module = "职位申请", operation = "UPDATE_STATUS", description = "更新申请状态")
     @PutMapping("/{id}/status")
     public Result<Void> updateStatus(
             @PathVariable Long id,
@@ -104,5 +109,22 @@ public class JobApplicationController {
     public Result<Page<ApplicationResponse>> listApplications(ApplicationQueryRequest request) {
         Page<ApplicationResponse> page = jobApplicationService.listApplications(request);
         return Result.success(page);
+    }
+
+    /**
+     * 计算/重新计算 AI 匹配分数
+     * POST /api/v1/applications/{id}/match-score
+     */
+    @Operation(summary = "计算AI匹配分数", description = "基于向量语义(30%)+技能(35%)+经验(20%)+学历(15%)多维打分")
+    @AuditLog(module = "职位申请", operation = "MATCH_SCORE", description = "计算AI匹配分数")
+    @PostMapping("/{id}/match-score")
+    public Result<MatchScoreResponse> calculateMatchScore(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        log.info("计算匹配分数：userId={}, applicationId={}", userId, id);
+
+        MatchScoreResponse response = matchScoreService.calculateAndSave(id);
+        return Result.success(response);
     }
 }

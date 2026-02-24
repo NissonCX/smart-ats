@@ -1,5 +1,6 @@
 package com.smartats.module.webhook.controller;
 
+import com.smartats.common.annotation.AuditLog;
 import com.smartats.common.result.Result;
 import com.smartats.module.webhook.dto.WebhookCreateRequest;
 import com.smartats.module.webhook.dto.WebhookResponse;
@@ -28,6 +29,7 @@ public class WebhookController {
      * POST /api/v1/webhooks
      */
     @Operation(summary = "创建 Webhook 配置", description = "自动生成 HMAC 密钥")
+    @AuditLog(module = "Webhook", operation = "CREATE", description = "创建 Webhook 配置")
     @PostMapping
     public Result<WebhookResponse> createWebhook(
             @Valid @RequestBody WebhookCreateRequest request,
@@ -60,6 +62,7 @@ public class WebhookController {
      * DELETE /api/v1/webhooks/{id}
      */
     @Operation(summary = "删除 Webhook 配置")
+    @AuditLog(module = "Webhook", operation = "DELETE", description = "删除 Webhook 配置")
     @DeleteMapping("/{id}")
     public Result<Void> deleteWebhook(
             @PathVariable Long id,
