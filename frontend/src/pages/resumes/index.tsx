@@ -11,11 +11,9 @@ import {
   Typography,
   message,
   Badge,
-  Divider,
 } from 'antd';
 import {
   UploadOutlined,
-  CloudUploadOutlined,
   FileTextOutlined,
   FilePdfOutlined,
   FileWordOutlined,
@@ -23,16 +21,22 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   SyncOutlined,
-  InboxOutlined,
+  CloudUploadOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
+import { motion } from 'framer-motion';
 import { resumeApi } from '../../api';
 import type { Resume, TaskStatusResponse } from '../../types';
+import PageTransition from '../../components/PageTransition';
+import { staggerContainer, staggerItem } from '../../components/motionVariants';
 
-const { Title, Text } = Typography;
-const { Dragger } = Upload;
+const { Text, Title } = Typography;
 
-const parseStatusConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
+const parseStatusConfig: Record<
+  string,
+  { color: string; icon: React.ReactNode; label: string }
+> = {
   PENDING: { color: 'default', icon: <ClockCircleOutlined />, label: '等待解析' },
   PARSING: { color: 'processing', icon: <SyncOutlined spin />, label: '解析中' },
   COMPLETED: { color: 'success', icon: <CheckCircleOutlined />, label: '解析完成' },
@@ -41,9 +45,10 @@ const parseStatusConfig: Record<string, { color: string; icon: React.ReactNode; 
 
 const fileIcon = (name: string) => {
   const ext = name?.split('.').pop()?.toLowerCase();
-  if (ext === 'pdf') return <FilePdfOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
-  if (ext === 'doc' || ext === 'docx') return <FileWordOutlined style={{ color: '#3b82f6', fontSize: 18 }} />;
-  return <FileTextOutlined style={{ fontSize: 18 }} />;
+  if (ext === 'pdf') return <FilePdfOutlined className="text-red-500 text-lg" />;
+  if (ext === 'doc' || ext === 'docx')
+    return <FileWordOutlined className="text-blue-500 text-lg" />;
+  return <FileTextOutlined className="text-gray-400 text-lg" />;
 };
 
 interface UploadTask {
@@ -64,6 +69,7 @@ export default function ResumesPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [tasks, setTasks] = useState<UploadTask[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadResumes = useCallback(async () => {
@@ -82,8 +88,9 @@ export default function ResumesPage() {
   }, [loadResumes]);
 
   useEffect(() => {
-    // 轮询解析状态
-    const pendingTasks = tasks.filter((t) => t.status === 'PENDING' || t.status === 'PARSING');
+    const pendingTasks = tasks.filter(
+      (t) => t.status === 'PENDING' || t.status === 'PARSING'
+    );
     if (pendingTasks.length > 0 && !pollingRef.current) {
       pollingRef.current = setInterval(async () => {
         const updated = await Promise.all(
@@ -95,7 +102,12 @@ export default function ResumesPage() {
               return {
                 ...task,
                 status: info.status,
-                progress: info.status === 'COMPLETED' ? 100 : info.status === 'PARSING' ? 60 : 20,
+                progress:
+                  info.status === 'COMPLETED'
+                    ? 100
+                    : info.status === 'PARSING'
+                      ? 60
+                      : 20,
                 candidateId: info.candidateId ?? undefined,
                 errorMessage: info.errorMessage ?? undefined,
               };
@@ -105,7 +117,9 @@ export default function ResumesPage() {
           })
         );
         setTasks(updated);
-        const stillPending = updated.filter((t) => t.status === 'PENDING' || t.status === 'PARSING');
+        const stillPending = updated.filter(
+          (t) => t.status === 'PENDING' || t.status === 'PARSING'
+        );
         if (stillPending.length === 0) {
           clearInterval(pollingRef.current!);
           pollingRef.current = null;
@@ -121,8 +135,11 @@ export default function ResumesPage() {
     };
   }, [tasks, loadResumes]);
 
-  const handleUpload = async (fileList: UploadFile[]) => {
-    if (fileList.length === 0) return;
+  const handleUpload = async () => {
+    if (fileList.length === 0) {
+      message.warning('请先选择要上传的文件');
+      return;
+    }
     setUploading(true);
     try {
       if (fileList.length === 1) {
@@ -132,7 +149,12 @@ export default function ResumesPage() {
         if (resp) {
           setTasks((prev) => [
             ...prev,
-            { taskId: resp.taskId, fileName: file.name, status: 'PENDING', progress: 20 },
+            {
+              taskId: resp.taskId,
+              fileName: file.name,
+              status: 'PENDING',
+              progress: 20,
+            },
           ]);
           message.success(`${file.name} 上传成功，开始解析`);
         }
@@ -151,11 +173,13 @@ export default function ResumesPage() {
             }));
           setTasks((prev) => [...prev, ...newTasks]);
           message.success(`${resp.successCount} 个文件上传成功`);
-          if (resp.failedCount > 0) {
+          if (resp.failedCount > 0)
             message.warning(`${resp.failedCount} 个文件上传失败`);
-          }
         }
       }
+      // 成功后关闭弹窗并清空文件列表
+      setUploadModalOpen(false);
+      setFileList([]);
     } catch (err: unknown) {
       message.error(err instanceof Error ? err.message : '上传失败');
     } finally {
@@ -165,20 +189,22 @@ export default function ResumesPage() {
 
   const columns = [
     {
-      title: '文件',
+      title: '文件名',
       dataIndex: 'originalFilename',
-      width: 280,
+      width: 240,
       render: (name: string) => (
-        <Space>
+        <div className="flex items-center gap-2">
           {fileIcon(name)}
-          <Text ellipsis style={{ maxWidth: 220 }}>{name}</Text>
-        </Space>
+          <Text ellipsis style={{ maxWidth: 180 }} className="font-medium">
+            {name}
+          </Text>
+        </div>
       ),
     },
     {
-      title: '文件大小',
+      title: '大小',
       dataIndex: 'fileSize',
-      width: 100,
+      width: 90,
       render: (size: number) => {
         if (!size) return '-';
         if (size < 1024) return `${size} B`;
@@ -189,186 +215,214 @@ export default function ResumesPage() {
     {
       title: '解析状态',
       dataIndex: 'parseStatus',
-      width: 120,
+      width: 110,
       render: (status: string) => {
         const cfg = parseStatusConfig[status] || parseStatusConfig.PENDING;
-        return (
-          <Tag icon={cfg.icon} color={cfg.color}>
-            {cfg.label}
-          </Tag>
-        );
+        return <Tag icon={cfg.icon} color={cfg.color}>{cfg.label}</Tag>;
       },
     },
-    {
-      title: '上传者',
-      dataIndex: 'uploaderName',
-      width: 100,
-    },
-    {
-      title: '上传时间',
-      dataIndex: 'createdAt',
-      width: 160,
-    },
+    { title: '上传者', dataIndex: 'uploaderName', width: 100 },
+    { title: '上传时间', dataIndex: 'createdAt', width: 160 },
   ];
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>简历管理</Title>
-        <Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadModalOpen(true)}>
-          上传简历
-        </Button>
+    <PageTransition>
+      {/* Page Header */}
+      <div className="mb-6">
+        <Title level={2} className="m-0 text-gray-900">
+          简历管理
+        </Title>
+        <p className="text-gray-500 mt-1">上传简历，AI 自动解析候选人信息</p>
       </div>
 
-      {/* 解析任务进度 */}
-      {tasks.length > 0 && (
-        <Card
-          bordered={false}
-          title={
-            <Space>
-              <SyncOutlined spin={tasks.some((t) => t.status === 'PARSING' || t.status === 'PENDING')} />
-              解析任务
-              <Badge
-                count={tasks.filter((t) => t.status === 'PENDING' || t.status === 'PARSING').length}
-                style={{ backgroundColor: '#4f46e5' }}
-              />
-            </Space>
-          }
-          style={{ marginBottom: 16 }}
-          extra={
-            <Button
-              size="small"
-              type="link"
-              onClick={() => setTasks([])}
-              disabled={tasks.some((t) => t.status === 'PENDING' || t.status === 'PARSING')}
-            >
-              清除
-            </Button>
-          }
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {tasks.map((task) => {
-              const cfg = parseStatusConfig[task.status] || parseStatusConfig.PENDING;
-              return (
-                <div
-                  key={task.taskId}
-                  style={{
-                    padding: '12px 16px',
-                    borderRadius: 8,
-                    border: '1px solid #e2e8f0',
-                    background: '#fafbfc',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Space>
-                      {fileIcon(task.fileName)}
-                      <Text ellipsis style={{ maxWidth: 160 }}>{task.fileName}</Text>
-                    </Space>
-                    <Tag color={cfg.color} style={{ marginRight: 0 }}>{cfg.label}</Tag>
-                  </div>
-                  <Progress
-                    percent={task.progress}
-                    size="small"
-                    status={task.status === 'FAILED' ? 'exception' : task.status === 'COMPLETED' ? 'success' : 'active'}
-                  />
-                  {task.errorMessage && (
-                    <Text type="danger" style={{ fontSize: 12 }}>{task.errorMessage}</Text>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {/* 列表 */}
-      <Card bordered={false}>
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={resumes}
-          loading={loading}
-          pagination={{
-            current: pageNum,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, s) => {
-              setPageNum(p);
-              setPageSize(s);
-            },
-          }}
-        />
-      </Card>
-
-      {/* 上传弹窗 */}
-      <Modal
-        title="上传简历"
-        open={uploadModalOpen}
-        onCancel={() => setUploadModalOpen(false)}
-        footer={null}
-        width={520}
-      >
-        <Dragger
-          name="files"
-          multiple
-          accept=".pdf,.doc,.docx"
-          maxCount={20}
-          showUploadList
-          beforeUpload={() => false}
-          onChange={() => {
-            // 仅收集文件，不自动上传
-          }}
-          customRequest={() => {}}
-          style={{ marginBottom: 16 }}
-        >
-          <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ color: '#4f46e5', fontSize: 48 }} />
-          </p>
-          <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
-          <p className="ant-upload-hint">
-            支持 PDF、DOC、DOCX 格式，单个文件不超过 10MB，批量最多 20 个
-          </p>
-        </Dragger>
-        <Divider />
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Space>
-            <Button onClick={() => setUploadModalOpen(false)}>取消</Button>
-            <UploadButton
-              uploading={uploading}
-              onUpload={(files) => {
-                handleUpload(files);
-                setUploadModalOpen(false);
+      <motion.div variants={staggerContainer} initial="initial" animate="animate">
+        {/* 解析任务进度 */}
+        {tasks.length > 0 && (
+          <motion.div variants={staggerItem}>
+            <Card
+              bordered={false}
+              className="mb-5 !border-0 !shadow-sm"
+              styles={{
+                body: { padding: '16px 20px' },
               }}
-            />
-          </Space>
-        </div>
-      </Modal>
-    </div>
-  );
-}
+              title={
+                <Space className="text-sm">
+                  <SyncOutlined
+                    spin={tasks.some(
+                      (t) => t.status === 'PARSING' || t.status === 'PENDING'
+                    )}
+                    className="text-cyan-600"
+                  />
+                  <span className="font-medium text-gray-700">解析任务</span>
+                  <Badge
+                    count={
+                      tasks.filter(
+                        (t) => t.status === 'PENDING' || t.status === 'PARSING'
+                      ).length
+                    }
+                    className="[&_.ant-badge-count]:!bg-cyan-600"
+                  />
+                </Space>
+              }
+              extra={
+                <Button
+                  size="small"
+                  type="text"
+                  onClick={() => setTasks([])}
+                  disabled={tasks.some(
+                    (t) => t.status === 'PENDING' || t.status === 'PARSING'
+                  )}
+                  className="!text-gray-500 hover:!text-gray-700"
+                >
+                  清除
+                </Button>
+              }
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {tasks.map((task) => {
+                  const cfg = parseStatusConfig[task.status] || parseStatusConfig.PENDING;
+                  return (
+                    <div
+                      key={task.taskId}
+                      className="p-3 rounded-lg border border-gray-100 bg-gray-50"
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <Space className="!gap-1.5">
+                          {fileIcon(task.fileName)}
+                          <Text ellipsis style={{ maxWidth: 120 }} className="text-sm">
+                            {task.fileName}
+                          </Text>
+                        </Space>
+                        <Tag color={cfg.color} className="mr-0 !m-0">
+                          {cfg.label}
+                        </Tag>
+                      </div>
+                      <Progress
+                        percent={task.progress}
+                        size="small"
+                        strokeColor={{ '0%': '#06B6D4', '100%': '#10B981' }}
+                        status={
+                          task.status === 'FAILED'
+                            ? 'exception'
+                            : task.status === 'COMPLETED'
+                              ? 'success'
+                              : 'active'
+                        }
+                      />
+                      {task.errorMessage && (
+                        <Text type="danger" className="text-xs mt-1 block">
+                          {task.errorMessage}
+                        </Text>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
-/** Upload button that grabs files from sibling Dragger */
-function UploadButton({
-  uploading,
-  onUpload,
-}: {
-  uploading: boolean;
-  onUpload: (files: UploadFile[]) => void;
-}) {
-  return (
-    <Upload
-      accept=".pdf,.doc,.docx"
-      multiple
-      maxCount={20}
-      showUploadList={false}
-      beforeUpload={() => false}
-      onChange={({ fileList }) => onUpload(fileList)}
-    >
-      <Button type="primary" icon={<CloudUploadOutlined />} loading={uploading}>
-        选择文件并上传
-      </Button>
-    </Upload>
+        {/* 主内容区 - 左侧列表，右侧上传 */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
+          {/* 简历列表 */}
+          <motion.div variants={staggerItem} className="xl:col-span-3">
+            <Card
+              bordered={false}
+              className="!border-0 !shadow-sm h-full"
+              title={
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-700">简历列表</span>
+                  <Text type="secondary" className="text-sm">
+                    共 {total} 份
+                  </Text>
+                </div>
+              }
+            >
+              <Table
+                rowKey="id"
+                columns={columns}
+                dataSource={resumes}
+                loading={loading}
+                scroll={{ x: true }}
+                pagination={{
+                  current: pageNum,
+                  pageSize,
+                  total,
+                  showSizeChanger: true,
+                  showTotal: (t) => `共 ${t} 条`,
+                  onChange: (p, s) => {
+                    setPageNum(p);
+                    setPageSize(s);
+                  },
+                }}
+              />
+            </Card>
+          </motion.div>
+
+          {/* 上传区域 */}
+          <motion.div variants={staggerItem} className="xl:col-span-1">
+            <Card
+              bordered={false}
+              className="!border-0 !shadow-sm"
+              title={<span className="font-medium text-gray-700">快速上传</span>}
+            >
+              <div className="space-y-4">
+                {/* 上传按钮 */}
+                <Upload.Dragger
+                  accept=".pdf,.doc,.docx"
+                  multiple
+                  maxCount={20}
+                  fileList={fileList}
+                  onChange={({ fileList }) => setFileList(fileList)}
+                  beforeUpload={() => false}
+                  className="!bg-gray-50"
+                >
+                  <div className="py-6">
+                    <CloudUploadOutlined className="text-4xl text-cyan-600 mb-3" />
+                    <p className="text-gray-700 font-medium mb-1">点击或拖拽上传</p>
+                    <p className="text-gray-400 text-xs">
+                      PDF / DOC / DOCX，单文件最大 10MB
+                    </p>
+                  </div>
+                </Upload.Dragger>
+
+                {/* 操作按钮 */}
+                <Space className="w-full" direction="vertical" className="!w-full">
+                  <Button
+                    type="primary"
+                    icon={<UploadOutlined />}
+                    onClick={handleUpload}
+                    loading={uploading}
+                    disabled={fileList.length === 0}
+                    block
+                    size="large"
+                    className="!h-12"
+                  >
+                    {fileList.length > 0 ? `上传 ${fileList.length} 个文件` : '上传简历'}
+                  </Button>
+                  {fileList.length > 0 && (
+                    <Button
+                      icon={<DeleteOutlined />}
+                      onClick={() => setFileList([])}
+                      disabled={uploading}
+                      block
+                    >
+                      清空选择
+                    </Button>
+                  )}
+                </Space>
+
+                {/* 说明文字 */}
+                <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
+                  <p>• AI 自动提取候选人信息</p>
+                  <p>• 支持批量上传，最多 20 个文件</p>
+                  <p>• 上传后自动开始解析</p>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        </div>
+      </motion.div>
+    </PageTransition>
   );
 }

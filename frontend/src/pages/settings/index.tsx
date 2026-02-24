@@ -12,8 +12,6 @@ import {
   message,
   Popconfirm,
   Badge,
-  Row,
-  Col,
   Checkbox,
 } from 'antd';
 import {
@@ -24,12 +22,18 @@ import {
   LoadingOutlined,
   LinkOutlined,
 } from '@ant-design/icons';
+import { motion } from 'framer-motion';
 import { webhookApi } from '../../api';
 import type { WebhookResponse, WebhookEventType } from '../../types';
+import PageTransition from '../../components/PageTransition';
+import { staggerContainer, staggerItem } from '../../components/motionVariants';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
-const eventCategoryMap: Record<string, { label: string; color: string; events: WebhookEventType[] }> = {
+const eventCategoryMap: Record<
+  string,
+  { label: string; color: string; events: WebhookEventType[] }
+> = {
   resume: {
     label: '简历',
     color: 'blue',
@@ -109,27 +113,29 @@ export default function SettingsPage() {
     {
       title: 'URL',
       dataIndex: 'url',
-      width: 320,
+      width: 280,
       render: (url: string) => (
-        <Space>
-          <LinkOutlined style={{ color: '#4f46e5' }} />
-          <Text copyable ellipsis style={{ maxWidth: 280 }}>{url}</Text>
-        </Space>
+        <span className="flex items-center gap-2">
+          <LinkOutlined className="text-cyan-600" />
+          <Text copyable ellipsis style={{ maxWidth: 240 }}>
+            {url}
+          </Text>
+        </span>
       ),
     },
     {
       title: '事件类型',
       dataIndex: 'events',
-      width: 300,
+      width: 240,
       render: (events: string[]) => (
         <Space size={4} wrap>
           {events?.slice(0, 3).map((e) => {
-            const cat = Object.values(eventCategoryMap).find((c) => c.events.includes(e as WebhookEventType));
-            return (
-              <Tag key={e} color={cat?.color || 'default'} style={{ borderRadius: 4, fontSize: 11 }}>
-                {e}
-              </Tag>
+            const cat = Object.values(eventCategoryMap).find((c) =>
+              c.events.includes(e as WebhookEventType)
             );
+            return <Tag key={e} color={cat?.color || 'default'}>
+              {e}
+            </Tag>;
           })}
           {events?.length > 3 && <Tag>+{events.length - 3}</Tag>}
         </Space>
@@ -138,8 +144,13 @@ export default function SettingsPage() {
     {
       title: '签名密钥',
       dataIndex: 'secretHint',
-      width: 120,
-      render: (v: string) => (v ? <Text code>{v}</Text> : <Text type="secondary">未设置</Text>),
+      width: 100,
+      render: (v: string) =>
+        v ? (
+          <Text code>{v}</Text>
+        ) : (
+          <span className="text-gray-400">未设置</span>
+        ),
     },
     {
       title: '状态',
@@ -154,7 +165,7 @@ export default function SettingsPage() {
     },
     {
       title: '操作',
-      width: 160,
+      width: 140,
       render: (_: unknown, record: WebhookResponse) => (
         <Space size={4}>
           <Button
@@ -177,32 +188,41 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div>
-      <Title level={4} style={{ marginBottom: 24 }}>系统设置</Title>
+    <PageTransition>
+      <h2 className="text-xl font-semibold text-gray-900 mb-6">系统设置</h2>
 
-      {/* Webhook 管理 */}
-      <Card
-        bordered={false}
-        title={
-          <Space>
-            <ApiOutlined style={{ color: '#4f46e5' }} />
-            <span>Webhook 配置</span>
-          </Space>
-        }
-        extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModal(true)}>
-            新建 Webhook
-          </Button>
-        }
-      >
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={webhooks}
-          loading={loading}
-          pagination={false}
-        />
-      </Card>
+      <motion.div variants={staggerContainer} initial="initial" animate="animate">
+        {/* Webhook 管理 */}
+        <motion.div variants={staggerItem}>
+          <Card
+            bordered={false}
+            title={
+              <span className="flex items-center gap-2">
+                <ApiOutlined className="text-cyan-600" />
+                <span>Webhook 配置</span>
+              </span>
+            }
+            extra={
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setCreateModal(true)}
+              >
+                新建 Webhook
+              </Button>
+            }
+          >
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={webhooks}
+              loading={loading}
+              scroll={{ x: true }}
+              pagination={false}
+            />
+          </Card>
+        </motion.div>
+      </motion.div>
 
       {/* 创建 Webhook 弹窗 */}
       <Modal
@@ -213,7 +233,7 @@ export default function SettingsPage() {
         okText="创建"
         width={580}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" className="mt-4">
           <Form.Item
             name="url"
             label="Webhook URL"
@@ -222,7 +242,10 @@ export default function SettingsPage() {
               { type: 'url', message: '请输入有效的 URL' },
             ]}
           >
-            <Input prefix={<LinkOutlined />} placeholder="https://example.com/webhook" />
+            <Input
+              prefix={<LinkOutlined />}
+              placeholder="https://example.com/webhook"
+            />
           </Form.Item>
 
           <Form.Item name="secret" label="签名密钥（HMAC-SHA256）">
@@ -234,27 +257,27 @@ export default function SettingsPage() {
             label="订阅事件"
             rules={[{ required: true, message: '至少选择一个事件' }]}
           >
-            <Checkbox.Group style={{ width: '100%' }}>
+            <Checkbox.Group className="w-full">
               {Object.entries(eventCategoryMap).map(([catKey, catData]) => (
-                <div key={catKey} style={{ marginBottom: 16 }}>
-                  <Text strong>
-                    <Tag color={catData.color} style={{ marginRight: 8 }}>{catData.label}</Tag>
-                  </Text>
-                  <Row gutter={8} style={{ marginTop: 8 }}>
+                <div key={catKey} className="mb-4">
+                  <span className="font-semibold">
+                    <Tag color={catData.color} className="mr-2">
+                      {catData.label}
+                    </Tag>
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 mt-2">
                     {catData.events.map((event) => (
-                      <Col span={12} key={event}>
-                        <Checkbox value={event} style={{ marginBottom: 4 }}>
-                          <Text style={{ fontSize: 13 }}>{event}</Text>
-                        </Checkbox>
-                      </Col>
+                      <Checkbox key={event} value={event} className="mb-1">
+                        <span className="text-[13px]">{event}</span>
+                      </Checkbox>
                     ))}
-                  </Row>
+                  </div>
                 </div>
               ))}
             </Checkbox.Group>
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </PageTransition>
   );
 }

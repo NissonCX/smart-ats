@@ -1,37 +1,106 @@
-:root {
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-sidebar: #0f172a;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --border: #e2e8f0;
-  --radius: 12px;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+@import "tailwindcss";
+
+/* ==================== SmartATS Design System ==================== */
+/* 现代专业 SaaS 配色 - Cyan 主色调 */
+
+@theme {
+  /* ---------- Primary Colors (Cyan) ---------- */
+  --color-primary: #06B6D4;
+  --color-primary-hover: #0891B2;
+  --color-primary-active: #0E7490;
+  --color-primary-light: rgba(6, 182, 212, 0.1);
+  --color-primary-lighter: rgba(6, 182, 212, 0.05);
+
+  /* ---------- Functional Colors ---------- */
+  --color-success: #10B981;
+  --color-success-light: rgba(16, 185, 129, 0.1);
+  --color-warning: #F59E0B;
+  --color-warning-light: rgba(245, 158, 11, 0.1);
+  --color-error: #F43F5E;
+  --color-error-light: rgba(244, 63, 94, 0.1);
+  --color-info: #3B82F6;
+  --color-info-light: rgba(59, 130, 246, 0.1);
+
+  /* ---------- Neutral Palette ---------- */
+  --color-white: #FFFFFF;
+  --color-gray-50: #F8FAFC;
+  --color-gray-100: #F1F5F9;
+  --color-gray-200: #E2E8F0;
+  --color-gray-300: #CBD5E1;
+  --color-gray-400: #94A3B8;
+  --color-gray-500: #64748B;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1E293B;
+  --color-gray-900: #0F172A;
+
+  /* ---------- Semantic ---------- */
+  --color-bg-body: #F8FAFC;
+  --color-bg-card: #FFFFFF;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-hover: #F1F5F9;
+  --color-bg-disabled: #F1F5F9;
+
+  --color-border-default: rgba(0, 0, 0, 0.08);
+  --color-border-light: rgba(0, 0, 0, 0.06);
+  --color-border-hover: rgba(0, 0, 0, 0.12);
+
+  --color-text-primary: #1E293B;
+  --color-text-secondary: #64748B;
+  --color-text-tertiary: #94A3B8;
+  --color-text-disabled: #CBD5E1;
+
+  /* ---------- Shadows ---------- */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 6px 0 rgba(0, 0, 0, 0.03), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 4px 12px 0 rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  --shadow-xl: 0 8px 24px 0 rgba(0, 0, 0, 0.06);
+
+  /* ---------- Radius ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ---------- Typography ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+
+  /* ---------- Transitions ---------- */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
 }
 
+/* ==================== Base Resets ==================== */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body, #root {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
-    sans-serif;
+html {
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  text-rendering: optimizeLegibility;
 }
 
-/* ==================== Scrollbar ====================  */
+html,
+body,
+#root {
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--color-bg-body);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+}
+
+/* ==================== Scrollbar ==================== */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -42,54 +111,336 @@ html, body, #root {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(0, 0, 0, 0.15);
 }
 
-/* ==================== Ant Design 覆盖 ==================== */
+/* ==================== Selection ==================== */
+::selection {
+  background: var(--color-primary-light);
+  color: var(--color-text-primary);
+}
+
+/* ==================== Inter Font ==================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ==================== Layout ==================== */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ==================== Ant Design Overrides ==================== */
+
+/* Layout */
 .ant-layout {
-  background: var(--bg-primary) !important;
+  background: var(--color-bg-body) !important;
 }
 
+/* Card */
 .ant-card {
-  border-radius: var(--radius) !important;
-  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--color-border-default) !important;
   box-shadow: var(--shadow-sm) !important;
-  transition: all 0.2s ease;
+  transition: box-shadow var(--duration-normal) var(--ease-in-out) !important;
+  background: var(--color-bg-card) !important;
 }
 
 .ant-card:hover {
   box-shadow: var(--shadow-md) !important;
 }
 
+/* Table */
 .ant-table-wrapper .ant-table {
-  border-radius: var(--radius) !important;
+  border-radius: var(--radius-lg) !important;
 }
 
-.ant-btn-primary {
+.ant-table-thead > tr > th,
+.ant-table-thead > tr > td {
+  background: var(--color-gray-50) !important;
+  font-weight: 500 !important;
+  color: var(--color-text-secondary) !important;
+  font-size: 13px !important;
+  border-bottom: 1px solid var(--color-border-light) !important;
+  padding: 12px 16px !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--color-border-light) !important;
+  color: var(--color-text-primary) !important;
+  padding: 12px 16px !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: var(--color-gray-50) !important;
+}
+
+/* Button */
+.ant-btn {
+  border-radius: var(--radius-md) !important;
+  font-weight: 500 !important;
+  transition: all var(--duration-fast) var(--ease-in-out) !important;
   box-shadow: none !important;
 }
 
+.ant-btn-primary {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+}
+
+.ant-btn-primary:hover {
+  background: var(--color-primary-hover) !important;
+  border-color: var(--color-primary-hover) !important;
+}
+
+.ant-btn-primary:active {
+  background: var(--color-primary-active) !important;
+  border-color: var(--color-primary-active) !important;
+}
+
+.ant-btn-default {
+  border: 1px solid var(--color-border-default) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.ant-btn-default:hover {
+  border-color: var(--color-border-hover) !important;
+  color: var(--color-text-primary) !important;
+  background: var(--color-bg-hover) !important;
+}
+
+/* Input */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+.ant-select-selector {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--color-border-default) !important;
+  transition: all var(--duration-fast) var(--ease-in-out) !important;
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused,
+.ant-input-number:focus,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 2px var(--color-primary-lighter) !important;
+}
+
+/* Modal */
 .ant-modal .ant-modal-content {
-  border-radius: var(--radius) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-xl) !important;
+  border: 1px solid var(--color-border-default) !important;
 }
 
+.ant-modal .ant-modal-header {
+  border-bottom: 1px solid var(--color-border-light) !important;
+  padding: 16px 20px !important;
+}
+
+.ant-modal .ant-modal-body {
+  padding: 20px !important;
+}
+
+.ant-modal .ant-modal-footer {
+  padding: 12px 20px !important;
+  border-top: 1px solid var(--color-border-light) !important;
+}
+
+/* Drawer */
+.ant-drawer .ant-drawer-header {
+  border-bottom: 1px solid var(--color-border-light) !important;
+  padding: 16px 20px !important;
+}
+
+.ant-drawer .ant-drawer-body {
+  padding: 20px !important;
+}
+
+/* Tag */
 .ant-tag {
-  border-radius: 6px !important;
+  border-radius: var(--radius-sm) !important;
+  border: none !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+  padding: 2px 8px !important;
 }
 
-/* ==================== 页面过渡 ==================== */
-.page-enter {
-  opacity: 0;
-  transform: translateY(8px);
+/* Menu */
+.ant-menu-dark {
+  background: transparent !important;
 }
 
-.page-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+.ant-menu-dark .ant-menu-item {
+  border-radius: var(--radius-md) !important;
+  margin: 2px 6px !important;
+  transition: all var(--duration-fast) var(--ease-in-out) !important;
+  height: 38px !important;
+  line-height: 38px !important;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background: var(--color-primary) !important;
+  color: white !important;
+}
+
+.ant-menu-dark .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Progress */
+.ant-progress .ant-progress-bg {
+  background: linear-gradient(90deg, var(--color-primary), var(--color-success)) !important;
+}
+
+/* Pagination */
+.ant-pagination-item {
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--color-border-default) !important;
+}
+
+.ant-pagination-item-active {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+}
+
+.ant-pagination-item-active a {
+  color: white !important;
+}
+
+/* Message */
+.ant-message .ant-message-notice-content {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border: 1px solid var(--color-border-default) !important;
+}
+
+/* Dropdown */
+.ant-dropdown .ant-dropdown-menu {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border: 1px solid var(--color-border-default) !important;
+  padding: 4px !important;
+}
+
+.ant-dropdown .ant-dropdown-menu-item {
+  border-radius: var(--radius-md) !important;
+}
+
+/* Popover */
+.ant-popover .ant-popover-inner {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* Tabs */
+.ant-tabs .ant-tabs-tab {
+  font-weight: 500 !important;
+  color: var(--color-text-secondary) !important;
+  padding: 8px 12px !important;
+}
+
+.ant-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--color-primary) !important;
+}
+
+.ant-tabs .ant-tabs-ink-bar {
+  background: var(--color-primary) !important;
+}
+
+/* Upload */
+.ant-upload {
+  border-radius: var(--radius-md) !important;
+}
+
+.ant-upload-drag {
+  border: 1px dashed var(--color-gray-300) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--color-gray-50) !important;
+  transition: all var(--duration-fast) var(--ease-in-out) !important;
+}
+
+.ant-upload-drag:hover {
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary-lighter) !important;
+}
+
+/* Form Item */
+.ant-form-item-label > label {
+  font-weight: 500 !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* ==================== Utilities ==================== */
+
+/* Text colors */
+.text-primary { color: var(--color-primary); }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-error { color: var(--color-error); }
+.text-gray-400 { color: var(--color-gray-400); }
+.text-gray-500 { color: var(--color-gray-500); }
+.text-gray-600 { color: var(--color-gray-600); }
+.text-gray-700 { color: var(--color-gray-700); }
+
+/* Background colors */
+.bg-primary { background-color: var(--color-primary); }
+.bg-primary-light { background-color: var(--color-primary-light); }
+.bg-gray-50 { background-color: var(--color-gray-50); }
+
+/* Card variants */
+.card-elevated {
+  box-shadow: var(--shadow-md) !important;
+}
+
+.card-hoverable {
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-in-out);
+}
+
+.card-hoverable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* ==================== Animations ==================== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp var(--duration-normal) var(--ease-in-out) forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--duration-normal) var(--ease-in-out) forwards;
+}
+
+/* ==================== Reduced Motion ==================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

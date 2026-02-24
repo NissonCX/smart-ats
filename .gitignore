@@ -114,3 +114,4 @@ PATCH
 DELETE
 PUT
 docs/*.pdf
+.factorypath
