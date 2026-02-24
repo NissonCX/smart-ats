@@ -1,454 +1,272 @@
 # SmartATS — 智能招聘管理系统
 
-> 面向 HR 的 AI 驱动简历解析与人才搜索平台
+<p align="center">
+  <b>基于 Spring Boot 3 + 智谱AI + Milvus 的 AI 驱动 ATS 系统</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-21-blue" alt="Java 21">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.2.5-brightgreen" alt="Spring Boot 3.2.5">
+  <img src="https://img.shields.io/badge/Spring%20AI-1.0.0--M4-orange" alt="Spring AI">
+  <img src="https://img.shields.io/badge/Tests-190%20passed-success" alt="Tests">
+  <img src="https://img.shields.io/badge/API%20Endpoints-40-blue" alt="API">
+  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
+</p>
 
 ---
 
 ## 项目简介
 
-**SmartATS**（Smart Applicant Tracking System）是一套面向 HR 的智能招聘管理系统，覆盖从简历上传、AI 解析到面试管理的完整招聘流程。
+**SmartATS**（Smart Applicant Tracking System）是一套面向 HR 的智能招聘管理系统。系统支持简历上传、AI 自动解析结构化信息、完整招聘流程管理（职位申请、面试安排）、RAG 语义候选人搜索以及 Webhook 事件通知。
 
-| 链路 | 功能描述 | 状态 |
-|------|---------|------|
-| **认证链路** | 注册 / 登录 / JWT 鉴权，角色：ADMIN / HR / INTERVIEWER | ✅ 98% |
-| **上传链路** | 上传简历 → MD5 去重 → MinIO 存储 → MQ 异步 → AI 结构化提取 | ✅ 95% |
-| **招聘流程链路** | 职位管理 → 候选人 → 投递申请 → 面试安排 → 面试反馈 | ✅ 95% |
-| **Webhook 链路** | 事件触发 → 签名 → 异步发送 → 重试 → 日志记录 | ✅ 95% |
-| **检索链路** | 关键词筛选 + RAG 语义搜索（候选人向量检索） | ⏳ 待实现 |
+> 📌 这是一个**学习项目**，旨在实践 Spring Boot 3 全栈开发、AI 集成、分布式系统设计等技术。
 
-**整体完成度**: ~92%（核心功能）  
-**总 API 端点数**: 37 个  
-**Java 源文件数**: 84 个
+### 核心特性
+
+- **AI 简历解析** — 上传 PDF/DOC/DOCX 简历，智谱AI 自动提取姓名、技能、工作经历等结构化数据
+- **异步处理管道** — RabbitMQ 消息队列 + Redisson 分布式锁 + 重试机制 + 死信队列
+- **RAG 语义搜索** — Milvus 向量数据库 + embedding-3 嵌入模型，自然语言搜索候选人
+- **完整招聘流程** — 职位发布 → 简历解析 → 候选人管理 → 投递申请 → 面试安排 → 反馈
+- **Webhook 通知** — 12 种事件类型，HMAC-SHA256 签名，异步发送 + 重试
+- **Redis 缓存体系** — Cache-aside 模式 + 延迟双删 + 原子计数器 + 热门排行
+
+### 业务链路
+
+```
+简历上传 → MD5 去重 → MinIO 存储 → RabbitMQ 异步 → AI 结构化提取 → 向量化入库 → Webhook 通知
+    ↓
+语义搜索 → Query Embedding → Milvus ANN 检索 → 分数过滤 → MySQL 补全 → RAG 响应
+```
 
 ---
 
 ## 技术栈
 
-| 层次 | 技术 | 版本 | 用途 | 状态 |
-|------|------|------|------|------|
-| 核心框架 | Spring Boot | 3.2.5 | 基础框架 | ✅ |
-| 运行时 | JDK | 21 | Java 运行环境 | ✅ |
-| ORM | MyBatis-Plus | 3.5.10.1 | 数据库操作（LambdaQueryWrapper） | ✅ |
-| 数据库 | MySQL | 8.0 | 业务数据持久化，含全文索引 | ✅ |
-| 缓存 | Redis | 7.0 | 缓存、分布式去重、原子计数 | ✅ |
-| 分布式锁 | Redisson | 3.25.0 | Watchdog 自动续期分布式锁 | ✅ |
-| 消息队列 | RabbitMQ | 3.12 | 简历解析任务异步解耦、死信补偿 | ✅ |
-| 对象存储 | MinIO | 8.5.10 | 简历文件存储 | ✅ |
-| AI 集成 | Spring AI | 1.0.0-M4 | 智谱AI 调用（OpenAI 兼容模式） | ✅ |
-| 文档处理 | Apache POI / PDFBox | 5.2.5 / 2.0.29 | DOC/DOCX/PDF 内容提取 | ✅ |
-| 认证 | Spring Security + JWT | - | 接口鉴权、BCrypt 密码加密 | ✅ |
-| 邮件 | Spring Mail | - | HTML 验证码邮件（QQ SMTP） | ✅ |
-| JSON | Fastjson2 | 2.0.43 | 序列化 | ✅ |
-| 工具库 | Hutool | 5.8.23 | 加密、时间、字符串 | ✅ |
+| 层次 | 技术 | 版本 |
+|------|------|------|
+| 核心框架 | Spring Boot | 3.2.5 |
+| 运行时 | JDK | 21 |
+| ORM | MyBatis-Plus | 3.5.10.1 |
+| 数据库 | MySQL | 8.0 |
+| 缓存 & 分布式锁 | Redis + Redisson | 7.0 / 3.25.0 |
+| 消息队列 | RabbitMQ | 3.12 |
+| 文件存储 | MinIO | 8.5.10 |
+| 向量数据库 | Milvus | 2.4.17 |
+| AI 集成 | Spring AI + 智谱AI | 1.0.0-M4 |
+| 文档解析 | Apache POI + PDFBox | 5.2.5 / 2.0.29 |
+| 安全认证 | Spring Security + JWT | jjwt 0.11.5 |
+| API 文档 | SpringDoc OpenAPI | 2.5.0 |
+| 测试 | JUnit 5 + Mockito + MockMvc | 190 测试用例 |
 
 ---
 
 ## 系统架构
 
 ```
-┌──────────┐     ┌─────────────────────────────────────────────────────────────┐
-│ HR Client│────▶│  API 层：Spring Security JWT 过滤器                          │
-└──────────┘     └──────────────────────────┬──────────────────────────────────┘
-                                            │
-    ┌──────────────┬──────────────┬─────────┼──────────┬──────────────┬──────────────┐
-    ▼              ▼              ▼         ▼          ▼              ▼              ▼
-┌────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐
-│ 认证   │  │ 职位管理 │  │ 简历上传 │  │ 候选人 │  │ 职位申请 │  │ 面试记录 │  │Webhook │
-│ 模块   │  │ 模块     │  │ 模块     │  │ 模块   │  │ 模块     │  │ 模块     │  │ 模块   │
-└────────┘  └──────────┘  └────┬─────┘  └────────┘  └──────────┘  └──────────┘  └────────┘
-                               │ 发 MQ 消息
-                               ▼
-                      ┌──────────────────┐
-                      │    RabbitMQ      │
-                      │  resume.parse    │
-                      │  .queue          │
-                      │  DLX → DLQ 死信  │
-                      └────────┬─────────┘
-                               │ 消费
-                               ▼
-                      ┌────────────────────────┐
-                      │  解析消费者              │
-                      │  1. 幂等检查            │
-                      │  2. Redisson 分布式锁   │
-                      │  3. 文件内容提取        │
-                      │  4. AI 结构化提取       │
-                      │  5. 写 MySQL candidates │
-                      │  6. Webhook 通知        │
-                      └────────────────────────┘
+                        Spring Security + JWT 认证过滤器
+                                    |
+    +--------+--------+--------+----+----+--------+--------+--------+
+    |        |        |             |        |        |        |
+  认证     职位    简历上传     候选人     申请     面试    Webhook
+  模块     模块    + AI解析    + 搜索     模块     模块     模块
+                    |              |
+              RabbitMQ          Milvus
+             异步解析管道       向量搜索
+             DLX → DLQ         ANN 检索
+                    |
+              解析消费者
+              Redisson 分布式锁
+              智谱AI 结构化提取  ──▶ MinIO (文件)
+              向量嵌入 & 入库    ──▶ MySQL (数据)
+              Webhook 事件通知  ──▶ Milvus (向量)
+                                ──▶ Redis (缓存)
 ```
 
 ---
 
 ## 快速启动
 
-### 前置依赖
+### 环境要求
 
-| 工具 | 版本要求 | 说明 |
-|------|----------|------|
-| JDK | 21 | 必须，低版本不兼容 |
-| Maven | 3.9+ | 构建工具 |
-| Docker Desktop | 最新版 | 运行所有基础设施服务 |
+| 工具 | 版本要求 |
+|------|----------|
+| JDK | 21 |
+| Maven | 3.9+ |
+| Docker Desktop | 最新版 |
 
 ### 第一步：启动基础设施
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/NissonCX/SmartATS.git
 cd SmartATS
 
-# 一键启动 MySQL / Redis / RabbitMQ / MinIO
+# 启动全部服务（MySQL、Redis、RabbitMQ、MinIO、Milvus）
 docker-compose up -d
 
-# 验证服务健康
+# 查看服务状态
 docker-compose ps
 ```
 
-| 服务 | 地址 | 账号 / 密码 |
-|------|------|------------|
-| MySQL | `localhost:3307` | `smartats` / `smartats123` |
-| Redis | `localhost:6379` | 密码：`redis123` |
-| RabbitMQ 管理界面 | `http://localhost:15672` | `admin` / `admin123`，VHost：`smartats` |
-| MinIO 控制台 | `http://localhost:9001` | `admin` / `admin123456` |
+> **注意**：Milvus 首次启动需要约 90 秒，且内存占用约 1~2GB。如不需要向量搜索功能，可以只启动核心服务：
+> ```bash
+> docker-compose up -d mysql redis rabbitmq minio
+> ```
 
-### 第二步：初始化数据库
+| 服务 | 地址 | 用途 |
+|------|------|------|
+| MySQL | `localhost:3307` | 业务数据库 |
+| Redis | `localhost:6379` | 缓存 & 分布式锁 |
+| RabbitMQ | `localhost:5672` / `localhost:15672`（管理界面） | 消息队列 |
+| MinIO | `localhost:9000` / `localhost:9001`（控制台） | 文件存储 |
+| Milvus | `localhost:19530` | 向量数据库 |
+
+### 第二步：配置环境变量
 
 ```bash
-# 初始化数据库表
-mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < docker/mysql/init/01-init-database.sql
-
-# 创建 webhook 表
-mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < src/main/resources/db/webhook_tables.sql
+cp .env.example .env
 ```
 
-### 第三步：配置环境变量
-
-创建 `.env` 文件（已加入 `.gitignore`）：
+编辑 `.env` 文件，填入必需的配置：
 
 ```env
-# 智谱AI（必需）
+# 必填：智谱AI API Key（https://open.bigmodel.cn 获取）
 ZHIPU_API_KEY=your_api_key_here
-ZHIPU_MODEL=glm-4-flash-250414
 
-# 邮件功能（可选）
-MAIL_HOST=smtp.qq.com
-MAIL_PORT=587
-MAIL_USERNAME=your_email@qq.com
-MAIL_PASSWORD=your_qq_smtp_auth_code
+# 可选：邮件功能（QQ 邮箱 SMTP）
+MAIL_USERNAME=your_email@foxmail.com
+MAIL_PASSWORD=your_smtp_auth_code
+```
 
-# JWT密钥（生产环境必须修改）
-JWT_SECRET=your_production_secret_key_minimum_32_characters
+### 第三步：初始化数据库
+
+```bash
+mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < docker/mysql/init/01-init-database.sql
+mysql -h 127.0.0.1 -P 3307 -u smartats -psmartats123 smartats < src/main/resources/db/webhook_tables.sql
 ```
 
 ### 第四步：构建并运行
 
 ```bash
-mvn clean install
+mvn clean install -DskipTests
 mvn spring-boot:run
 ```
 
-应用启动后监听：`http://localhost:8080/api/v1`
+应用启动后：
+- API 地址：`http://localhost:8080/api/v1`
+- Swagger 文档：`http://localhost:8080/api/v1/swagger-ui.html`
+
+---
+
+## API 接口概览
+
+共 **40 个** REST API 端点，完整文档见 Swagger UI。
+
+| 模块 | 端点数 | 路径前缀 | 说明 |
+|------|:------:|---------|------|
+| 认证 | 5 | `/auth` | 注册、登录、JWT 刷新、邮箱验证码 |
+| 职位 | 8 | `/jobs` | CRUD、发布/关闭、热门排行 |
+| 简历 | 5 | `/resumes` | 单文件/批量上传、解析状态查询 |
+| 候选人 | 5 | `/candidates` | CRUD、多维筛选、数据脱敏 |
+| 职位申请 | 6 | `/applications` | 创建申请、状态流转、多维查询 |
+| 面试 | 5 | `/interviews` | 安排、反馈、取消 |
+| Webhook | 4 | `/webhooks` | CRUD、测试发送 |
+| 智能搜索 | 2 | `/smart-search` | RAG 语义候选人搜索 |
+
+**认证方式**：除登录/注册外，所有接口需在请求头携带 `Authorization: Bearer <token>`
 
 ---
 
 ## 数据库设计
 
-共 8 张核心表：
-
-### 表关系概览
+8 张核心表：
 
 ```
 users ──┐
-        ├──▶ jobs ──────────────────────────────────┐
-        │                                           │
-        └──▶ resumes ──▶ candidates ────────────────┤
-                                  └──▶ job_applications ──▶ interview_records
+        ├──▶ jobs ──────────────────────────────┐
+        │                                       │
+        └──▶ resumes ──▶ candidates ────────────┤
+                               └──▶ job_applications ──▶ interview_records
+
+webhook_configs ──▶ webhook_logs
 ```
 
-### 各表说明
-
-| 表名 | 用途 | 关键字段 |
-|------|------|---------|
-| `users` | 账号体系 | `role`（ADMIN/HR/INTERVIEWER），`daily_ai_quota` AI 配额 |
-| `jobs` | 职位信息 | `status`（DRAFT/PUBLISHED/CLOSED），`required_skills` JSON |
-| `resumes` | 简历文件 | `file_hash` MD5 唯一索引，`status` 状态流转 |
-| `candidates` | AI 提取结构化数据 | `skills` JSON，`work_experiences` JSON，`raw_json` |
-| `job_applications` | 投递记录 | `status` 状态流转，`match_score` AI 匹配分 |
-| `interview_records` | 面试记录 | `round` 轮次，`recommendation` 推荐级别 |
-| `webhook_configs` | Webhook 配置 | `event_types` JSON，`secret` 签名密钥 |
-| `webhook_logs` | Webhook 日志 | `status`，`response_body` |
+| 表名 | 说明 |
+|------|------|
+| `users` | 用户账号（ADMIN / HR / INTERVIEWER） |
+| `jobs` | 职位信息（DRAFT → PUBLISHED → CLOSED） |
+| `resumes` | 简历文件（MD5 去重，唯一索引 `file_hash`） |
+| `candidates` | AI 提取的结构化候选人数据 |
+| `job_applications` | 投递记录（PENDING → SCREENING → INTERVIEW → OFFER/REJECTED） |
+| `interview_records` | 面试记录（多轮次、评分、推荐等级） |
+| `webhook_configs` | Webhook 配置（事件类型、签名密钥） |
+| `webhook_logs` | Webhook 投递日志 |
 
 ---
 
-## API 接口文档
-
-**Base URL：** `/api/v1`
-
-**认证方式：** 除注册/登录外，所有接口需在请求头携带：
-```
-Authorization: Bearer <accessToken>
-```
-
-**统一响应格式：**
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {},
-  "timestamp": 1704067200000
-}
-```
-
-### 认证模块 `/auth`（5 个端点）
-
-| 方法 | 路径 | 说明 | Token |
-|------|------|------|:-----:|
-| POST | `/auth/register` | 用户注册（BCrypt 加密，禁止自注册 ADMIN） | ❌ |
-| POST | `/auth/login` | 登录（accessToken 2h + refreshToken 7d） | ❌ |
-| POST | `/auth/send-verification-code` | 发送邮箱验证码（5 分钟有效） | ❌ |
-| POST | `/auth/refresh` | 刷新 Token | ❌ |
-| GET | `/auth/test` | 测试认证状态 | ✅ |
-
-### 职位模块 `/jobs`（8 个端点）
-
-| 方法 | 路径 | 说明 | Token |
-|------|------|------|:-----:|
-| POST | `/jobs` | 创建职位 | ✅ |
-| PUT | `/jobs` | 更新职位 | ✅ |
-| GET | `/jobs/{id}` | 获取职位详情（Redis 缓存） | ❌ |
-| GET | `/jobs` | 分页查询职位列表 | ❌ |
-| POST | `/jobs/{id}/publish` | 发布职位 | ✅ |
-| POST | `/jobs/{id}/close` | 关闭职位 | ✅ |
-| DELETE | `/jobs/{id}` | 删除职位 | ✅ |
-| GET | `/jobs/hot` | 热门职位排行（Redis ZSet） | ❌ |
-
-### 简历模块 `/resumes`（4 个端点）
-
-| 方法 | 路径 | 说明 | Token |
-|------|------|------|:-----:|
-| POST | `/resumes/upload` | 单文件上传（PDF/DOC/DOCX，≤ 10MB） | ✅ |
-| GET | `/resumes/tasks/{taskId}` | 查询解析任务状态 | ✅ |
-| GET | `/resumes/{id}` | 获取简历详情 | ✅ |
-| GET | `/resumes` | 分页查询简历列表 | ✅ |
-
-### 候选人模块 `/candidates`（5 个端点）
-
-| 方法 | 路径 | 说明 | Token |
-|------|------|------|:-----:|
-| GET | `/candidates/resume/{resumeId}` | 按简历 ID 查询候选人 | ✅ |
-| GET | `/candidates/{id}` | 获取候选人详情（Redis 缓存） | ✅ |
-| PUT | `/candidates/{id}` | 更新候选人信息 | ✅ |
-| DELETE | `/candidates/{id}` | 删除候选人 | ✅ |
-| GET | `/candidates` | 分页查询（多维筛选 + 脱敏） | ✅ |
-
-### 职位申请模块 `/applications`（6 个端点）
-
-| 方法 | 路径 | 说明 | Token |
-|------|------|------|:-----:|
-| POST | `/applications` | 创建申请（防重复提交） | ✅ |
-| PUT | `/applications/{id}/status` | 更新申请状态 | ✅ |
-| GET | `/applications/{id}` | 获取申请详情 | ✅ |
-| GET | `/applications/job/{jobId}` | 某职位的申请列表 | ✅ |
-| GET | `/applications/candidate/{candidateId}` | 某候选人的申请列表 | ✅ |
-| GET | `/applications` | 分页查询 | ✅ |
-
-### 面试模块 `/interviews`（5 个端点）
-
-| 方法 | 路径 | 说明 | Token |
-|------|------|------|:-----:|
-| POST | `/interviews` | 安排面试 | ✅ |
-| PUT | `/interviews/{id}/feedback` | 提交面试反馈 | ✅ |
-| POST | `/interviews/{id}/cancel` | 取消面试 | ✅ |
-| GET | `/interviews/{id}` | 获取面试详情 | ✅ |
-| GET | `/interviews/application/{appId}` | 某申请的所有面试轮次 | ✅ |
-
-### Webhook 模块 `/webhooks`（4 个端点）
-
-| 方法 | 路径 | 说明 | Token |
-|------|------|------|:-----:|
-| POST | `/webhooks` | 创建 Webhook 配置 | ✅ |
-| GET | `/webhooks` | 查询 Webhook 列表 | ✅ |
-| DELETE | `/webhooks/{id}` | 删除 Webhook 配置 | ✅ |
-| POST | `/webhooks/{id}/test` | 测试 Webhook | ✅ |
-
----
-
-## Redis 规范
-
-### Key 命名一览
-
-| Key 模式 | 类型 | 用途 | TTL |
-|----------|------|------|-----|
-| `jwt:token:{userId}` | String | Access Token | 2h |
-| `jwt:refresh:{userId}` | String | Refresh Token | 7d |
-| `verification_code:{email}` | String | 邮箱验证码 | 5min |
-| `verification_code-limit:{email}` | String | 验证码发送频率限制 | 60s |
-| `task:resume:{taskId}` | String | 解析任务状态 | 24h |
-| `idempotent:resume:{resumeId}` | String | 幂等性检查 | 1h |
-| `dedup:resume:{fileHash}` | String | 文件 MD5 去重标记 | 7d |
-| `lock:resume:{fileHash}` | String | Redisson 分布式锁 | 自动释放 |
-| `cache:job:{jobId}` | String | 职位详情缓存 | 30min |
-| `cache:job:hot` | ZSet | 热门职位排行 | 10min |
-| `counter:job:view:{jobId}` | String | 原子浏览计数器 | 持久化 |
-| `cache:candidate:{candidateId}` | String | 候选人缓存 | 30min |
-| `cache:application:{applicationId}` | String | 申请缓存 | 30min |
-| `cache:interview:{interviewId}` | String | 面试缓存 | 30min |
-
-所有 Key 前缀统一在 `RedisKeyConstants.java` 中管理。
-
----
-
-## RabbitMQ 拓扑
+## 项目结构
 
 ```
-Producer
-  └──▶ smartats.exchange（Direct Exchange，durable）
-         │
-         │  routing_key: resume.parse
-         ▼
-       resume.parse.queue（主队列）
-         │ x-dead-letter-exchange: smartats.dlx
-         │
-         │  Consumer 手动 ACK
-         │    1. 幂等检查（Redis 标记）
-         │    2. Redisson 锁（fileHash 维度）
-         │    3. 更新 Redis 状态 PROCESSING
-         │    4. 文件内容提取（POI/PDFBox）
-         │    5. AI 解析（智谱AI）
-         │    6. 写 MySQL（candidates）
-         │    7. Webhook 通知
-         │    8. 更新状态 COMPLETED → ACK
-         │
-         │  处理异常 → republish(retryCount+1) → ACK 原消息
-         │  超过 3 次 → NACK → 死信
-         ▼
-       smartats.dlx → resume.parse.dlq（死信队列）
+src/main/java/com/smartats/
+├── SmartAtsApplication.java
+├── common/                     # 公共组件
+│   ├── constants/              # Redis Key 常量
+│   ├── enums/                  # 状态枚举（6 个）
+│   ├── exception/              # BusinessException + 全局异常处理
+│   ├── result/                 # Result<T> + ResultCode
+│   └── util/                   # 文件校验、数据脱敏
+├── config/                     # 配置类（8 个）
+│   ├── SecurityConfig.java     # Spring Security + CORS 配置化
+│   ├── RabbitMQConfig.java     # MQ 拓扑
+│   ├── MilvusConfig.java       # Milvus 向量数据库
+│   ├── ZhipuAiConfig.java      # 智谱AI（OpenAI 兼容模式）
+│   └── ...
+├── infrastructure/             # 基础设施层
+│   ├── email/                  # 邮件服务
+│   ├── mq/                     # 消息发布
+│   ├── storage/                # MinIO 文件存储
+│   └── vector/                 # 嵌入 + 向量存储（Milvus）
+└── module/                     # 业务模块（8 个）
+    ├── auth/                   # 认证（注册/登录/JWT/验证码）
+    ├── job/                    # 职位管理
+    ├── resume/                 # 简历上传 + AI 解析
+    ├── candidate/              # 候选人 + 智能搜索
+    ├── application/            # 职位申请
+    ├── interview/              # 面试管理
+    └── webhook/                # Webhook 通知
 ```
 
 ---
 
-## AI 集成
+## 测试
 
-### 智谱AI 配置
+```bash
+# 运行全部测试（排除需要 Docker 的 MinIO 集成测试）
+mvn test -Dtest='!com.smartats.MinioFileStorageServiceTest'
 
-项目使用 Spring AI 集成智谱AI，完全兼容 OpenAI 格式：
-
-```yaml
-spring:
-  ai:
-    openai:
-      api-key: ${ZHIPU_API_KEY}
-      base-url: https://open.bigmodel.cn/api/paas/v4
-      chat:
-        enabled: true
-        options:
-          model: glm-4-flash-250414  # 免费模型
-          temperature: 0.3
-          max-tokens: 4000
+# 运行指定模块测试
+mvn test -Dtest='com.smartats.module.auth.**'
 ```
 
-### 简历解析流程
+当前状态：**190 个测试用例，19 个测试类，全部通过** ✅
 
-1. 文件上传到 MinIO
-2. Consumer 从 MinIO 下载文件
-3. 使用 POI/PDFBox 提取文本内容
-4. 调用智谱AI 解析，输出结构化 JSON
-5. 保存到 candidates 表
-6. 触发 Webhook 通知
+覆盖范围：
+- **Service 层单元测试**（Mockito）：UserService、JobService、ResumeService、CandidateService、ApplicationService、InterviewService、WebhookService、SmartSearchService、EmbeddingService、CandidateVectorService、VectorStoreService
+- **Controller 集成测试**（MockMvc）：AuthController、JobController、ResumeController、CandidateController、SmartSearchController、WebhookController
 
 ---
 
 ## 开发规范
 
-### 数据库操作
-
-```java
-// ✅ 正确：LambdaQueryWrapper（类型安全）
-userMapper.selectOne(new LambdaQueryWrapper<User>()
-    .eq(User::getUsername, username));
-
-// ❌ 错误：字符串形式
-userMapper.selectOne(new QueryWrapper<User>().eq("username", username));
-```
-
-### 核心规范
-
-- 业务异常统一抛出 `BusinessException(ResultCode.xxx)`
-- 密码必须 BCrypt 加密，响应中**禁止**返回密码字段
-- 多步数据库操作使用 `@Transactional(rollbackFor = Exception.class)`
-- 写操作后**删除缓存**（延迟双删），而非更新缓存
-- Redis 统一使用 `StringRedisTemplate` + `ObjectMapper` 手动序列化
-
-### 日志规范
-
-| 级别 | 使用场景 |
-|------|---------|
-| `INFO` | 业务里程碑（上传成功、解析完成） |
-| `WARN` | 潜在问题（缓存频繁未命中、重试次数增加） |
-| `ERROR` | 系统级错误（AI 调用失败、MQ 消息处理异常） |
-| `DEBUG` | 详细调试信息（生产环境关闭） |
-
----
-
-## 目录结构
-
-```
-src/main/java/com/smartats/
-├── SmartAtsApplication.java                # 启动类
-├── common/                                 # 公共组件（8 文件）
-│   ├── constants/RedisKeyConstants.java    # Redis Key 统一管理
-│   ├── exception/                          # BusinessException + GlobalExceptionHandler
-│   ├── handler/JsonTypeHandler.java        # MyBatis JSON 类型处理器
-│   ├── result/                             # Result<T> + ResultCode
-│   └── util/                               # FileValidationUtil + DataMaskUtil
-├── config/                                 # 配置类（6 文件）
-│   ├── SecurityConfig.java                 # Spring Security + CORS + JWT
-│   ├── RabbitMQConfig.java                 # Exchange, Queue, DLQ
-│   ├── MinioConfig.java                    # MinIO 客户端
-│   ├── AsyncConfig.java                    # @Async 线程池
-│   ├── RedissonConfig.java                 # Redisson 分布式锁
-│   └── ZhipuAiConfig.java                  # 智谱 AI（OpenAI 兼容）
-├── infrastructure/                         # 基础设施（4 文件）
-│   ├── email/EmailService.java             # 邮件发送
-│   ├── mq/MessagePublisher.java            # RabbitMQ 消息发布
-│   └── storage/                            # FileStorageService + MinIO 实现
-└── module/                                 # 业务模块（7 个，65 文件）
-    ├── auth/                               # ✅ 认证（12 文件）
-    ├── job/                                # ✅ 职位管理（10 文件）
-    ├── resume/                             # ✅ 简历上传 + AI 解析（11 文件）
-    ├── candidate/                          # ✅ 候选人（7 文件）
-    ├── application/                        # ✅ 职位申请（8 文件）
-    ├── interview/                          # ✅ 面试记录（7 文件）
-    └── webhook/                            # ✅ Webhook（10 文件）
-```
-
----
-
-## 项目进度
-
-### 当前状态（2026-02-23）
-
-| 模块 | 完成度 | 状态 |
-|------|--------|------|
-| 公共组件（统一响应 / 异常 / 工具） | 100% | ✅ |
-| Spring Security + 配置 | 100% | ✅ |
-| 认证模块（注册 / 登录 / JWT / 刷新） | 98% | ✅ |
-| 职位管理（CRUD / 缓存 / 热榜） | 95% | ✅ |
-| 简历上传（上传 / 去重 / AI 解析） | 95% | ✅ |
-| 候选人模块（筛选 / 缓存 / 脱敏） | 95% | ✅ |
-| 职位申请（创建 / 状态流转 / 查询） | 95% | ✅ |
-| 面试记录（安排 / 反馈 / 取消） | 95% | ✅ |
-| Webhook（创建 / 测试 / 13 种事件） | 95% | ✅ |
-| 单元测试 | 5% | ⚠️ 不足 |
-| 向量搜索 / RAG | 0% | ❌ 未开始 |
-
-### 下一步计划
-
-| 优先级 | 任务 | 预计时间 |
-|--------|------|----------|
-| 🔴 高 | 补充单元测试 | 1-2 周 |
-| 🟡 中 | 批量上传功能 | 1-2 天 |
-| 🟡 中 | Swagger/OpenAPI 文档 | 0.5 天 |
-| 🟡 中 | 向量搜索 / RAG 集成 | 1 周 |
-| 🟢 低 | 环境分离配置 | 1 天 |
+| 规范 | 要求 |
+|------|------|
+| 数据库操作 | 统一使用 `LambdaQueryWrapper`（类型安全） |
+| 异常处理 | 统一抛出 `BusinessException(ResultCode.xxx)` |
+| Redis 操作 | 使用 `StringRedisTemplate` + 手动 JSON 序列化 |
+| Redis Key | 统一使用 `RedisKeyConstants.*` 常量 |
+| 缓存策略 | 读：Cache-aside；写：删缓存 + 延迟双删 |
+| 文件上传 | 必须经过 `FileValidationUtil` 校验（Content-Type + Magic Number） |
+| 认证信息 | 通过 `Authentication.getPrincipal()` 获取 userId |
+| 日志 | INFO=业务里程碑，WARN=潜在问题，ERROR=系统错误，禁止记录密码 |
 
 ---
 
@@ -456,10 +274,10 @@ src/main/java/com/smartats/
 
 | 文档 | 说明 |
 |------|------|
-| [项目进度总结](docs/project-progress-summary.md) | 详细的模块完成情况分析 |
-| [下一步计划](docs/next-steps-plan-2026-02-23.md) | 开发优先级和技术方案 |
-| [SmartATS 设计文档](docs/SmartATS-Design-Document.md) | 完整技术规范：数据库 Schema、全量 API 定义 |
-| [从0到1开发教学手册](docs/SmartATS-从0到1开发教学手册.md) | 分阶段开发指南 |
+| [设计文档](docs/SmartATS-Design-Document.md) | 完整技术规范、数据库 Schema、API 定义 |
+| [开发教学手册](docs/SmartATS-从0到1开发教学手册.md) | 分阶段开发指南 |
+| [部署指南](docs/deployment-guide.md) | Docker Compose 部署、Nginx、监控、备份 |
+| [项目进度](docs/project-progress-summary.md) | 模块完成情况分析 |
 
 ---
 
@@ -469,6 +287,4 @@ MIT License
 
 ---
 
-**最后更新**: 2026年2月23日  
-**版本**: 1.0.0  
-**项目状态**: 开发中（核心功能 ~92% 完成）
+**最后更新**：2026 年 2 月 ｜ **版本**：1.0.0 ｜ **状态**：功能完整
