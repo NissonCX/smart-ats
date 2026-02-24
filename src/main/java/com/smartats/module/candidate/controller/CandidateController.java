@@ -11,6 +11,8 @@ import com.smartats.module.candidate.dto.CandidateResponse;
 import com.smartats.module.candidate.dto.CandidateUpdateRequest;
 import com.smartats.module.candidate.entity.Candidate;
 import com.smartats.module.candidate.service.CandidateService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 候选人管理接口
  */
+@Tag(name = "候选人管理", description = "CRUD、高级筛选、数据脱敏、语义搜索")
 @Slf4j
 @RestController
 @RequestMapping("/candidates")
@@ -31,6 +34,7 @@ public class CandidateController {
     /**
      * 根据 resumeId 查询候选人
      */
+    @Operation(summary = "根据简历ID查询候选人")
     @GetMapping("/resume/{resumeId}")
     public Result<CandidateResponse> getByResumeId(@PathVariable Long resumeId) {
         log.info("查询候选人: resumeId={}", resumeId);
@@ -47,6 +51,7 @@ public class CandidateController {
     /**
      * 根据 ID 查询候选人详情
      */
+    @Operation(summary = "查询候选人详情", description = "Redis 缓存优先，30分钟 TTL")
     @GetMapping("/{id}")
     public Result<CandidateResponse> getById(@PathVariable Long id) {
         log.info("查询候选人详情: id={}", id);
@@ -63,6 +68,7 @@ public class CandidateController {
     /**
      * 更新候选人信息（更新逻辑下沉到 Service 层）
      */
+    @Operation(summary = "更新候选人信息", description = "仅更新非 null 字段，异步重新向量化")
     @PutMapping("/{id}")
     public Result<CandidateResponse> updateCandidate(
             @PathVariable Long id,
@@ -77,6 +83,7 @@ public class CandidateController {
     /**
      * 删除候选人
      */
+    @Operation(summary = "删除候选人", description = "同步删除 Milvus 向量 + MySQL 记录")
     @DeleteMapping("/{id}")
     public Result<Void> deleteCandidate(@PathVariable Long id) {
         log.info("删除候选人: id={}", id);
@@ -93,6 +100,7 @@ public class CandidateController {
     /**
      * 分页查询候选人列表，支持多维度筛选
      */
+    @Operation(summary = "候选人列表", description = "支持关键词、学历、技能、工作年限等多维度筛选")
     @GetMapping
     public Result<IPage<CandidateResponse>> listCandidates(
             @RequestParam(defaultValue = "1") Integer page,

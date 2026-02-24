@@ -80,6 +80,13 @@ public class Candidate {
     private Double confidenceScore;
     private LocalDateTime parsedAt;
 
+    // ========== 向量搜索相关 ==========
+    /** 向量数据库中的记录 ID → 对应 DB 列 vector_id */
+    private String vectorId;
+
+    /** AI 生成的候选人摘要（用于嵌入和展示）→ 对应 DB 列 ai_summary */
+    private String aiSummary;
+
     // ========== 审计字段 ==========
     private LocalDateTime createdAt;
 

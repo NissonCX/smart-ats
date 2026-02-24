@@ -22,5 +22,14 @@ smartats:
     max-size: 10485760
   ai:
     daily-quota: 100
+    embedding:
+      model: embedding-3
   verification-code:
     expire-time: 300
+
+# Milvus 配置（测试环境 — Bean 将由 Mock 替代）
+milvus:
+  host: localhost
+  port: 19530
+  database: default
+  connect-timeout: 5000

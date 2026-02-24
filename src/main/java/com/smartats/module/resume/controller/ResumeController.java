@@ -6,6 +6,8 @@ import com.smartats.module.resume.dto.ResumeUploadResponse;
 import com.smartats.module.resume.dto.TaskStatusResponse;
 import com.smartats.module.resume.entity.Resume;
 import com.smartats.module.resume.service.ResumeService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -15,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 简历上传控制器
  */
+@Tag(name = "简历管理", description = "简历上传、AI 解析任务状态查询、简历详情")
 @Slf4j
 @RestController
 @RequestMapping("/resumes")
@@ -30,6 +33,7 @@ public class ResumeController {
      * @param authentication Spring Security 认证信息（自动注入）
      * @return 上传结果，包含 taskId 用于查询解析状态
      */
+    @Operation(summary = "上传简历", description = "支持 PDF/DOC/DOCX，≤ 10MB，MD5 去重，异步 AI 解析")
     @PostMapping("/upload")
     public Result<ResumeUploadResponse> uploadResume(
             @RequestParam("file") MultipartFile file,
@@ -52,6 +56,7 @@ public class ResumeController {
      * @param taskId 任务ID
      * @return 任务状态，包含解析进度、结果等
      */
+    @Operation(summary = "查询解析任务状态", description = "通过上传时返回的 taskId 轮询解析进度")
     @GetMapping("/tasks/{taskId}")
     public Result<TaskStatusResponse> getTaskStatus(@PathVariable String taskId) {
         log.debug("查询任务状态: taskId={}", taskId);
@@ -68,6 +73,7 @@ public class ResumeController {
      * @param authentication 登录用户（仅能查看自己的简历）
      * @return 简历详情
      */
+    @Operation(summary = "获取简历详情", description = "仅能查看当前用户的简历")
     @GetMapping("/{id}")
     public Result<Resume> getResumeById(
             @PathVariable Long id,
@@ -86,6 +92,7 @@ public class ResumeController {
      * @param authentication 登录用户
      * @return 简历分页列表
      */
+    @Operation(summary = "简历列表", description = "当前用户的简历分页列表")
     @GetMapping
     public Result<Page<Resume>> listResumes(
             @RequestParam(defaultValue = "1") int page,

@@ -37,6 +37,7 @@ public class CandidateService {
     private final CandidateMapper candidateMapper;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
+    private final CandidateVectorService candidateVectorService;
 
     /** 候选人缓存 TTL（分钟） */
     private static final long CACHE_TTL_MINUTES = 30;
@@ -183,8 +184,12 @@ public class CandidateService {
         candidateMapper.updateById(candidate);
         evictCache(id);
 
+        // 异步更新向量（候选人信息变更后需重新嵌入）
+        Candidate updated = getById(id);
+        candidateVectorService.vectorizeCandidateAsync(updated);
+
         log.info("候选人更新成功: candidateId={}", id);
-        return getById(id);
+        return updated;
     }
 
     /**
@@ -194,6 +199,8 @@ public class CandidateService {
     public void deleteById(Long id) {
         candidateMapper.deleteById(id);
         evictCache(id);
+        // 同步删除 Milvus 向量
+        candidateVectorService.deleteVector(id);
         log.info("候选人删除成功: candidateId={}", id);
     }
 

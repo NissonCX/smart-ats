@@ -44,6 +44,6 @@ public class LoginResponse {
         private String email;
         private String role;
         private Integer dailyAiQuota;
-        private Integer todayAiUsed;  // TODO: 后续从Redis 获取
+        private Integer todayAiUsed;
     }
 }

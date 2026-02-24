@@ -148,6 +148,8 @@ smartats:
 
   ai:
     daily-quota: 100              # 每日 AI 调用配额
+    embedding:
+      model: ${ZHIPU_EMBEDDING_MODEL:embedding-3}  # 智谱 embedding-3，1024 维
 
   verification-code:
     expire-time: 300              # 验证码过期时间（5分钟 = 300秒）
@@ -160,3 +162,10 @@ minio:
   connect-timeout: 10000  # 10秒
   write-timeout: 60000     # 60秒
   read-timeout: 10000      # 10秒
+
+# ==================== Milvus 向量数据库配置 ====================
+milvus:
+  host: ${MILVUS_HOST:localhost}
+  port: ${MILVUS_PORT:19530}
+  database: ${MILVUS_DATABASE:default}
+  connect-timeout: 10000  # 10秒

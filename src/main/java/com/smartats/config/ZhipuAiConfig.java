@@ -1,7 +1,10 @@
 package com.smartats.config;
 
+import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +22,8 @@ import org.springframework.web.reactive.function.client.WebClient;
  * <p>
  * 最终请求 URL = baseUrl + completionsPath
  *   = https://open.bigmodel.cn/api/paas/v4/chat/completions
+ * <p>
+ * Embedding 模型使用智谱 embedding-3，维度 1024，最大 token 8192。
  */
 @Configuration
 public class ZhipuAiConfig {
@@ -35,20 +40,27 @@ public class ZhipuAiConfig {
     @Value("${spring.ai.openai.chat.options.temperature:0.3}")
     private Double temperature;
 
+    @Value("${smartats.ai.embedding.model:embedding-3}")
+    private String embeddingModel;
+
+    /**
+     * 创建共享的 OpenAiApi 实例（Chat + Embedding 复用同一 API 客户端）
+     */
     @Bean
-    public OpenAiChatModel openAiChatModel() {
-        // 使用自定义 completionsPath，覆盖 Spring AI 默认的 /v1/chat/completions
-        // 智谱 AI 实际的聊天接口路径是 /chat/completions（不含 /v1 前缀）
-        OpenAiApi openAiApi = new OpenAiApi(
+    public OpenAiApi openAiApi() {
+        return new OpenAiApi(
                 baseUrl,
                 apiKey,
                 "/chat/completions",
-                "/v1/embeddings",
+                "/embeddings",
                 RestClient.builder(),
                 WebClient.builder(),
                 new DefaultResponseErrorHandler()
         );
+    }
 
+    @Bean
+    public OpenAiChatModel openAiChatModel(OpenAiApi openAiApi) {
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .withModel(model)
                 .withTemperature(temperature)
@@ -56,5 +68,21 @@ public class ZhipuAiConfig {
                 .build();
 
         return new OpenAiChatModel(openAiApi, options);
+    }
+
+    /**
+     * 智谱 Embedding 模型（embedding-3）
+     * <p>
+     * 输出维度：1024
+     * 最大输入 Token：8192
+     * 用于候选人简历文本向量化，支持语义搜索
+     */
+    @Bean
+    public OpenAiEmbeddingModel openAiEmbeddingModel(OpenAiApi openAiApi) {
+        OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
+                .withModel(embeddingModel)
+                .build();
+
+        return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED, options);
     }
 }

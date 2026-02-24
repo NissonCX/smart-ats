@@ -49,6 +49,9 @@ public class CandidateResponse {
     /** AI 解析置信度（0-1） */
     private Double confidenceScore;
 
+    /** AI 生成的候选人摘要 */
+    private String aiSummary;
+
     // ========== 元数据 ==========
     private LocalDateTime parsedAt;
     private LocalDateTime createdAt;

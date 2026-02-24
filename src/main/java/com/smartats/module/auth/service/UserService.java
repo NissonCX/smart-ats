@@ -141,7 +141,10 @@ public class UserService {
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // 第 6 步：构造响应对象
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(user.getId(), user.getUsername(), user.getEmail(), user.getRole(), user.getDailyAiQuota(), 0  // 今日已使用 AI 次数（后续从 Redis 读取）
+        int todayAiUsed = getTodayAiUsed(user.getId());
+        LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(
+                user.getId(), user.getUsername(), user.getEmail(),
+                user.getRole(), user.getDailyAiQuota(), todayAiUsed
         );
 
         LoginResponse response = new LoginResponse(accessToken, refreshToken, 7200L,  // expiresIn（秒）
@@ -240,10 +243,31 @@ public class UserService {
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // 第 6 步：构造响应
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        int refreshTodayAiUsed = getTodayAiUsed(user.getId());
         LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(
                 user.getId(), user.getUsername(), user.getEmail(),
-                user.getRole(), user.getDailyAiQuota(), 0);
+                user.getRole(), user.getDailyAiQuota(), refreshTodayAiUsed);
 
         return new LoginResponse(newAccessToken, newRefreshToken, jwtUtil.getExpiration(), userInfo);
+    }
+
+    /**
+     * 从 Redis 获取用户今日 AI 调用次数
+     * <p>
+     * Key 格式：rate:ai:{userId}:{date}（如 rate:ai:1:2026-02-24）
+     *
+     * @param userId 用户 ID
+     * @return 今日已使用次数，无记录时返回 0
+     */
+    private int getTodayAiUsed(Long userId) {
+        try {
+            String date = java.time.LocalDate.now().toString();
+            String key = RedisKeyConstants.AI_QUOTA_KEY_PREFIX + userId + ":" + date;
+            String value = redisTemplate.opsForValue().get(key);
+            return value != null ? Integer.parseInt(value) : 0;
+        } catch (Exception e) {
+            log.warn("获取今日 AI 使用次数失败（降级返回0）: userId={}", userId, e);
+            return 0;
+        }
     }
 }

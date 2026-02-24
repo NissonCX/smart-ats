@@ -39,6 +39,7 @@
         <poi.version>5.2.5</poi.version>
         <pdfbox.version>2.0.29</pdfbox.version>
         <springdoc.version>2.5.0</springdoc.version>
+        <milvus-sdk.version>2.4.8</milvus-sdk.version>
     </properties>
 
     <!-- ==================== 依赖管理 ==================== -->
@@ -192,6 +193,20 @@
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
             <version>${pdfbox.version}</version>
+        </dependency>
+
+        <!-- Milvus 向量数据库 Java SDK -->
+        <dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+            <version>${milvus-sdk.version}</version>
+            <exclusions>
+                <!-- 排除与 Spring Boot 内置 Netty 版本冲突 -->
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>netty-all</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- SpringDoc OpenAPI（Swagger UI + API 文档） -->

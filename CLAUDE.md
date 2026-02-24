@@ -6,19 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **SmartATS** is an intelligent recruitment management system for HR professionals. The system enables resume uploads, AI-powered automatic parsing of structured information (via 智谱AI), full recruitment workflow management (applications, interviews), and Webhook event notifications.
 
-**Current State** (2026-02-23):
-- ✅ All 7 business modules implemented and functional
-- ✅ 37 API endpoints across auth, job, resume, candidate, application, interview, webhook
+**Current State** (2026-02-24):
+- ✅ All 8 business modules implemented and functional (including vector search)
+- ✅ 39 API endpoints across auth, job, resume, candidate, application, interview, webhook, smart-search
 - ✅ AI resume parsing complete (智谱AI via Spring AI OpenAI-compatible mode)
 - ✅ Async processing pipeline (RabbitMQ + Redisson distributed lock + retry + DLQ)
 - ✅ Redis caching with cache-aside pattern, delayed double-delete, atomic counters
 - ✅ Comprehensive code quality optimization (34 issues fixed: security, N+1, exceptions, MQ)
 - ✅ Spring Security with JWT + CORS + role-based access
-- ⏳ Unit test coverage ~0% (only 1 MinIO integration test exists)
-- ❌ Vector database / RAG semantic search not started
-- ❌ Swagger/OpenAPI not configured
+- ✅ Milvus vector database + RAG semantic candidate search (embedding-3, 1024 dim)
+- ✅ Swagger/OpenAPI configured (SpringDoc 2.5.0, JWT Bearer scheme)
+- ✅ 184 unit/integration tests across 19 test classes (Service + Controller layers)
+- ✅ Environment profiles: dev / test / prod
 
-**Overall Progress: ~92%** (core business logic)
+**Overall Progress: ~98%** (core business logic + vector search + tests + docs)
 
 ## Technology Stack
 
@@ -38,7 +39,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Email | Spring Mail | - | ✅ |
 | JSON | Fastjson2 | 2.0.43 | ✅ |
 | Utilities | Hutool | 5.8.23 | ✅ |
-| Vector Database | Milvus/PgVector | - | ❌ Not Started |
+| Vector Database | Milvus | 2.4.17 (SDK 2.4.8) | ✅ Implemented |
+| API Docs | SpringDoc OpenAPI | 2.5.0 | ✅ Implemented |
+| Testing | JUnit 5 + Mockito + MockMvc | - | ✅ 184 tests |
 
 ## Development Environment Setup
 
@@ -102,25 +105,28 @@ src/main/java/com/smartats/
 │   ├── handler/JsonTypeHandler.java        # MyBatis JSON type handler
 │   ├── result/                             # Result<T> + ResultCode (error codes: 10xxx~43xxx)
 │   └── util/                               # FileValidationUtil + DataMaskUtil
-├── config/                                 # Configuration (6 files)
+├── config/                                 # Configuration (8 files)
 │   ├── SecurityConfig.java                 # Spring Security + CORS + JWT filter + whitelist
 │   ├── RabbitMQConfig.java                 # Exchange, Queue, DLX, DLQ
 │   ├── MinioConfig.java                    # MinIO client
 │   ├── AsyncConfig.java                    # @Async thread pools (asyncExecutor, webhookExecutor)
 │   ├── RedissonConfig.java                 # Redisson distributed lock client
-│   └── ZhipuAiConfig.java                  # 智谱AI (OpenAI-compatible)
-├── infrastructure/                         # Infrastructure (4 files)
+│   ├── ZhipuAiConfig.java                  # 智谱AI (OpenAI-compatible)
+│   ├── MilvusConfig.java                   # Milvus vector database client
+│   └── OpenApiConfig.java                  # SpringDoc + JWT Bearer scheme
+├── infrastructure/                         # Infrastructure (6 files)
 │   ├── email/EmailService.java             # HTML email with verification codes
 │   ├── mq/MessagePublisher.java            # RabbitMQ message publishing
-│   └── storage/                            # FileStorageService interface + MinIO impl
-└── module/                                 # Business modules (7 modules, 65 files)
+│   ├── storage/                            # FileStorageService interface + MinIO impl
+│   └── vector/                             # EmbeddingService + VectorStoreService (Milvus)
+└── module/                                 # Business modules (8 modules, 75+ files)
     ├── auth/          (12 files)           # ✅ 98% - Register, Login, JWT, Refresh, Verification
     ├── job/           (10 files)           # ✅ 95% - CRUD, Cache, Hot Ranking, View Count Sync
     ├── resume/        (11 files)           # ✅ 95% - Upload, Dedup, AI Parse, MQ Consumer
-    ├── candidate/     (7 files)            # ✅ 95% - CRUD, Advanced Filter, Cache, Data Masking
+    ├── candidate/     (12 files)           # ✅ 95% - CRUD, Filter, Cache, Masking, Vector
     ├── application/   (8 files)            # ✅ 95% - Create, Status Flow, Multi-Query
     ├── interview/     (7 files)            # ✅ 95% - Schedule, Feedback, Cancel, Query
-    └── webhook/       (10 files)           # ✅ 95% - CRUD, Test, 13 Event Types, HMAC Signing
+    └── webhook/       (10 files)           # ✅ 95% - CRUD, Test, 12 Event Types, HMAC Signing
 ```
 
 ## Architecture Overview
@@ -132,7 +138,7 @@ src/main/java/com/smartats/
 3. **Job Management Chain**: Create → Cache → Publish → View Count (Redis INCR) → Hot Ranking (ZSet) → Periodic DB Sync (GETDEL)
 4. **Recruitment Chain**: Create Application → Status Flow (PENDING→REVIEWING→INTERVIEW→OFFER/REJECTED) → Schedule Interview → Feedback
 5. **Webhook Chain**: Event Trigger → @Async Send → HMAC-SHA256 Signature → Retry → Log
-6. **Search Chain**: ❌ Not Implemented — Keyword/Vector Search → RAG Retrieval
+6. **Search Chain**: ✅ Query Embedding → Milvus ANN Search → Score Filter → MySQL Enrich → RAG Response
 
 ### Async Processing Flow (Resume)
 
@@ -212,7 +218,7 @@ All key prefixes are centralized in `RedisKeyConstants.java`.
 - **Retry**: Republish with incremented retryCount (max 3), then NACK to DLQ
 - **Message**: JSON with `taskId`, `resumeId`, `filePath`, `fileHash`, `uploaderId`, `retryCount`
 
-## API Endpoints Summary (37 total)
+## API Endpoints Summary (39 total)
 
 ### Authentication — 5 endpoints
 | Method | Path | Auth | Description |
@@ -279,7 +285,7 @@ All key prefixes are centralized in `RedisKeyConstants.java`.
 | DELETE | `/api/v1/webhooks/{id}` | ✅ | Delete webhook |
 | POST | `/api/v1/webhooks/{id}/test` | ✅ | Test webhook |
 
-## Webhook Event Types (13)
+## Webhook Event Types (12)
 
 `resume.uploaded`, `resume.parse_completed`, `resume.parse_failed`, `candidate.created`, `candidate.updated`, `application.submitted`, `application.status_changed`, `interview.scheduled`, `interview.completed`, `interview.cancelled`, `system.error`, `system.maintenance`
 
@@ -333,21 +339,20 @@ throw new BusinessException(ResultCode.NOT_FOUND, "候选人不存在");
 
 ## Known Issues and TODOs
 
-### High Priority
-1. **Test Coverage ~0%** — Only 1 MinIO integration test
-   - Need Service-layer unit tests with Mockito
-   - Need Controller integration tests with MockMvc
+### Resolved ✅
+- ~~Test Coverage ~0%~~ → 184 tests across 19 test classes (Service + Controller layers)
+- ~~Vector Search Not Implemented~~ → Milvus + RAG semantic candidate search (embedding-3, 1024 dim)
+- ~~Swagger/OpenAPI Not Configured~~ → SpringDoc 2.5.0, all 8 controllers annotated with @Tag + @Operation
+- ~~Environment Separation~~ → dev / test / prod profiles configured
+- ~~LoginResponse.todayAiUsed TODO~~ → Implemented via Redis `rate:ai:{userId}:{date}`
 
 ### Medium Priority
-2. **Vector Search Not Implemented** — RAG semantic search is the project differentiator
-3. **Swagger/OpenAPI Not Configured** — 37 endpoints without online docs
-4. **Batch Upload Missing** — Only single-file upload available
-5. **Environment Separation** — No dev/staging/prod profiles
-6. **CORS Configuration** — Currently allows all origins (production risk)
+1. **Batch Upload Missing** — Only single-file upload available
+2. **CORS Configuration** — Currently allows all origins (`SecurityConfig.java:77` TODO: configure allowed domains for production)
 
 ### Low Priority
-7. **LoginResponse.todayAiUsed** — TODO: fetch from Redis
-8. **ResumeService comment** — Says "TODO: MQ consumer" but it's already implemented (stale comment)
+3. **MinIO Integration Test** — `MinioFileStorageServiceTest` requires Docker running, currently excluded from CI
+4. **Deployment Documentation** — Production deployment guide (Docker Compose / K8s) not yet written
 
 ## Reference Documentation
 

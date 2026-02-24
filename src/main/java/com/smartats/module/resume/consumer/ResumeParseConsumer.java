@@ -11,6 +11,7 @@ import com.smartats.module.resume.entity.Resume;
 import com.smartats.module.resume.mapper.ResumeMapper;
 import com.smartats.module.candidate.entity.Candidate;
 import com.smartats.module.candidate.service.CandidateService;
+import com.smartats.module.candidate.service.CandidateVectorService;
 import com.smartats.module.resume.dto.CandidateInfo;
 import com.smartats.module.resume.service.ResumeContentExtractor;
 import com.smartats.module.resume.service.ResumeParseService;
@@ -37,6 +38,7 @@ public class ResumeParseConsumer {
     private final ResumeContentExtractor contentExtractor;
     private final ResumeParseService parseService;
     private final CandidateService candidateService;
+    private final CandidateVectorService candidateVectorService;
     private final RedissonClient redissonClient;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -117,7 +119,12 @@ public class ResumeParseConsumer {
             log.info("保存候选人信息: resumeId={}", resumeId);
             Candidate candidate = candidateService.createCandidate(resumeId, candidateInfo, rawJson);
             log.info("候选人信息保存成功: candidateId={}", candidate.getId());
-            updateTaskStatus(taskId, "PROCESSING", 90);
+            updateTaskStatus(taskId, "PROCESSING", 85);
+
+            // 7.5 向量化候选人（生成嵌入并存入 Milvus）
+            log.info("开始向量化候选人: candidateId={}", candidate.getId());
+            candidateVectorService.vectorizeCandidate(candidate);
+            updateTaskStatus(taskId, "PROCESSING", 95);
 
             // 8. 更新任务状态为 COMPLETED
             updateTaskStatus(taskId, "COMPLETED", 100);
