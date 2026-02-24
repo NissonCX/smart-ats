@@ -15,6 +15,10 @@ import com.smartats.module.interview.dto.ScheduleInterviewRequest;
 import com.smartats.module.interview.dto.SubmitFeedbackRequest;
 import com.smartats.module.interview.entity.InterviewRecord;
 import com.smartats.module.interview.mapper.InterviewRecordMapper;
+import com.smartats.common.enums.ApplicationStatus;
+import com.smartats.common.enums.InterviewStatus;
+import com.smartats.common.enums.InterviewType;
+import com.smartats.common.enums.Recommendation;
 import com.smartats.module.webhook.enums.WebhookEventType;
 import com.smartats.module.webhook.service.WebhookService;
 import lombok.RequiredArgsConstructor;
@@ -77,7 +81,8 @@ public class InterviewService {
             throw new BusinessException(ResultCode.APPLICATION_NOT_FOUND);
         }
         // 只有 SCREENING 或 INTERVIEW 状态的申请才允许安排面试
-        if (!"SCREENING".equals(application.getStatus()) && !"INTERVIEW".equals(application.getStatus())) {
+        if (!ApplicationStatus.SCREENING.getCode().equals(application.getStatus())
+                && !ApplicationStatus.INTERVIEW.getCode().equals(application.getStatus())) {
             throw new BusinessException(ResultCode.APPLICATION_STATUS_INVALID,
                     "当前申请状态为 [" + application.getStatus() + "]，不允许安排面试");
         }
@@ -104,7 +109,7 @@ public class InterviewService {
 
         LambdaQueryWrapper<InterviewRecord> conflictWrapper = new LambdaQueryWrapper<>();
         conflictWrapper.eq(InterviewRecord::getInterviewerId, request.getInterviewerId())
-                .eq(InterviewRecord::getStatus, "SCHEDULED")
+                .eq(InterviewRecord::getStatus, InterviewStatus.SCHEDULED.getCode())
                 .and(w -> w
                         // 已有面试的开始时间在新面试时间范围内
                         .between(InterviewRecord::getScheduledAt, startTime, endTime)
@@ -126,15 +131,15 @@ public class InterviewService {
         record.setInterviewType(request.getInterviewType());
         record.setScheduledAt(request.getScheduledAt());
         record.setDurationMinutes(duration);
-        record.setStatus("SCHEDULED");
+        record.setStatus(InterviewStatus.SCHEDULED.getCode());
         record.setCreatedAt(LocalDateTime.now());
         record.setUpdatedAt(LocalDateTime.now());
 
         interviewRecordMapper.insert(record);
 
         // ⑥ 如果申请状态为 SCREENING，自动推进到 INTERVIEW
-        if ("SCREENING".equals(application.getStatus())) {
-            application.setStatus("INTERVIEW");
+        if (ApplicationStatus.SCREENING.getCode().equals(application.getStatus())) {
+            application.setStatus(ApplicationStatus.INTERVIEW.getCode());
             application.setUpdatedAt(LocalDateTime.now());
             jobApplicationMapper.updateById(application);
             log.info("申请状态自动推进为 INTERVIEW：applicationId={}", applicationId);
@@ -175,7 +180,7 @@ public class InterviewService {
             throw new BusinessException(ResultCode.INTERVIEW_NOT_FOUND);
         }
 
-        if ("CANCELLED".equals(record.getStatus())) {
+        if (InterviewStatus.CANCELLED.getCode().equals(record.getStatus())) {
             throw new BusinessException(ResultCode.INTERVIEW_ALREADY_CANCELLED);
         }
 
@@ -183,7 +188,7 @@ public class InterviewService {
         record.setScore(request.getScore());
         record.setFeedback(request.getFeedback());
         record.setRecommendation(request.getRecommendation());
-        record.setStatus("COMPLETED");
+        record.setStatus(InterviewStatus.COMPLETED.getCode());
         record.setUpdatedAt(LocalDateTime.now());
 
         interviewRecordMapper.updateById(record);
@@ -219,15 +224,15 @@ public class InterviewService {
             throw new BusinessException(ResultCode.INTERVIEW_NOT_FOUND);
         }
 
-        if ("COMPLETED".equals(record.getStatus())) {
+        if (InterviewStatus.COMPLETED.getCode().equals(record.getStatus())) {
             throw new BusinessException(ResultCode.INTERVIEW_ALREADY_COMPLETED);
         }
 
-        if ("CANCELLED".equals(record.getStatus())) {
+        if (InterviewStatus.CANCELLED.getCode().equals(record.getStatus())) {
             throw new BusinessException(ResultCode.INTERVIEW_ALREADY_CANCELLED);
         }
 
-        record.setStatus("CANCELLED");
+        record.setStatus(InterviewStatus.CANCELLED.getCode());
         record.setUpdatedAt(LocalDateTime.now());
         interviewRecordMapper.updateById(record);
         evictCache(id);
@@ -372,46 +377,27 @@ public class InterviewService {
     }
 
     /**
-     * 面试类型中文描述
+     * 面试类型中文描述（委托给枚举）
      */
     private String getInterviewTypeDesc(String type) {
         if (type == null) return "";
-        return switch (type) {
-            case "PHONE"        -> "电话面试";
-            case "VIDEO"        -> "视频面试";
-            case "ONSITE"       -> "现场面试";
-            case "WRITTEN_TEST" -> "笔试";
-            default -> type;
-        };
+        return InterviewType.getDescriptionByCode(type);
     }
 
     /**
-     * 面试状态中文描述
+     * 面试状态中文描述（委托给枚举）
      */
     private String getStatusDesc(String status) {
         if (status == null) return "";
-        return switch (status) {
-            case "SCHEDULED" -> "已安排";
-            case "COMPLETED" -> "已完成";
-            case "CANCELLED" -> "已取消";
-            case "NO_SHOW"   -> "未出席";
-            default -> status;
-        };
+        return InterviewStatus.getDescriptionByCode(status);
     }
 
     /**
-     * 推荐结论中文描述
+     * 推荐结论中文描述（委托给枚举）
      */
     private String getRecommendationDesc(String recommendation) {
         if (recommendation == null) return "";
-        return switch (recommendation) {
-            case "STRONG_YES" -> "强烈推荐";
-            case "YES"        -> "推荐";
-            case "NEUTRAL"    -> "中性";
-            case "NO"         -> "不推荐";
-            case "STRONG_NO"  -> "强烈不推荐";
-            default -> recommendation;
-        };
+        return Recommendation.getDescriptionByCode(recommendation);
     }
 
     /**

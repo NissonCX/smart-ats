@@ -1,26 +1,27 @@
 # ==================== SmartATS 应用配置 ====================
 #
-# 📌 YAML 格式说明：
-#    - 缩进用 2 个空格（不能用 Tab！）
-#    - # 表示注释
-#    - key: value 表示键值对
+# 📌 环境配置说明：
+#    - 开发环境：使用 application-dev.yml（默认激活）
+#    - 生产环境：使用 application-prod.yml
+#    - 切换方式：设置环境变量 SPRING_PROFILES_ACTIVE=prod
 # ================================================================
 
-server:
-  port: 8080                    # 应用端口（浏览器访问 http://localhost:8080）
-  servlet:
-    context-path: /api/v1         # 全局路径前缀（所有接口以 /api/v1 开头）
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   # 📌 本地 .env 文件自动加载（Spring Boot 2.4+ 内置支持，无需额外依赖）
   # .env 中的变量会被注入到 ${KEY:default} 占位符中
   config:
     import: optional:file:.env[.properties]
+
   servlet:
     multipart:
       enabled: true
       max-file-size: 10MB       # 单个文件最大 10MB
       max-request-size: 50MB    # 请求最大 50MB
       file-size-threshold: 2MB  # 超过 2MB 才写入磁盘
+
   mail:
     host: ${MAIL_HOST:smtp.qq.com}
     port: ${MAIL_PORT:587}
@@ -36,6 +37,7 @@ spring:
         ssl:
           trust: smtp.qq.com
     default-encoding: UTF-8
+
   application:
     name: smartats              # 应用名称（会在日志、监控中显示）
 
@@ -100,6 +102,11 @@ spring:
           model: ${ZHIPU_MODEL:glm-4-flash-250414}  # 开发测试用免费模型
           temperature: 0.3                          # 温度（0-1，简历解析建议 0.3）
           max-tokens: 4000                          # 最大 token 数
+
+server:
+  port: 8080                    # 应用端口（浏览器访问 http://localhost:8080）
+  servlet:
+    context-path: /api/v1         # 全局路径前缀（所有接口以 /api/v1 开头）
 
 # ==================== Actuator 健康检查配置 ====================
 management:

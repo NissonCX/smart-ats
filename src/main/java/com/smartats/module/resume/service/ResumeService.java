@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.constants.RedisKeyConstants;
+import com.smartats.common.enums.ResumeStatus;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
 import com.smartats.common.util.FileValidationUtil;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
  * 功能：
  * 1. 简历上传（文件存储 + 去重检查）
  * 2. 任务状态查询
- * 3. 异步解析（TODO: MQ 消费者）
+ * 3. 异步解析（MQ 消费者已在 ResumeParseConsumer 中实现）
  */
 @Slf4j
 @Service
@@ -101,7 +102,7 @@ public class ResumeService {
         resume.setFileSize(file.getSize());
         resume.setFileHash(fileHash);
         resume.setFileType(file.getContentType());
-        resume.setStatus("PARSING");
+        resume.setStatus(ResumeStatus.PARSING.getCode());
         resume.setCreatedAt(LocalDateTime.now());
         resume.setUpdatedAt(LocalDateTime.now());
 
@@ -140,7 +141,7 @@ public class ResumeService {
             // MQ 发送失败时更新任务状态为 FAILED，避免用户永久看到 QUEUED
             try {
                 TaskStatusResponse failedStatus = new TaskStatusResponse();
-                failedStatus.setStatus("FAILED");
+                failedStatus.setStatus(ResumeStatus.FAILED.getCode());
                 failedStatus.setProgress(0);
                 failedStatus.setErrorMessage("消息队列发送失败，请稍后重试");
                 stringRedisTemplate.opsForValue().set(taskKey,

@@ -6,6 +6,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.constants.RedisKeyConstants;
+import com.smartats.common.enums.ApplicationStatus;
+import com.smartats.common.enums.JobStatus;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
 import com.smartats.module.application.dto.*;
@@ -55,20 +57,6 @@ public class JobApplicationService {
     /** 缓存 TTL（分钟） */
     private static final long CACHE_TTL_MINUTES = 30;
 
-    /**
-     * 合法的状态流转映射
-     * <p>
-     * Key: 当前状态, Value: 允许跳转的目标状态集合
-     */
-    private static final Map<String, Set<String>> VALID_TRANSITIONS = Map.of(
-            "PENDING",    Set.of("SCREENING", "REJECTED", "WITHDRAWN"),
-            "SCREENING",  Set.of("INTERVIEW", "REJECTED", "WITHDRAWN"),
-            "INTERVIEW",  Set.of("OFFER", "REJECTED", "WITHDRAWN"),
-            "OFFER",      Set.of("WITHDRAWN"),
-            "REJECTED",   Set.of(),
-            "WITHDRAWN",  Set.of()
-    );
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 创建申请
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -91,7 +79,7 @@ public class JobApplicationService {
         if (job == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "职位不存在");
         }
-        if (!"PUBLISHED".equals(job.getStatus())) {
+        if (!JobStatus.PUBLISHED.getCode().equals(job.getStatus())) {
             throw new BusinessException(ResultCode.APPLICATION_JOB_NOT_PUBLISHED);
         }
 
@@ -113,7 +101,7 @@ public class JobApplicationService {
         JobApplication application = new JobApplication();
         application.setJobId(jobId);
         application.setCandidateId(candidateId);
-        application.setStatus("PENDING");
+        application.setStatus(ApplicationStatus.PENDING.getCode());
         application.setHrNotes(request.getHrNotes());
         application.setAppliedAt(LocalDateTime.now());
         application.setUpdatedAt(LocalDateTime.now());
@@ -129,7 +117,7 @@ public class JobApplicationService {
         eventData.put("jobTitle", job.getTitle());
         eventData.put("candidateId", candidateId);
         eventData.put("candidateName", candidate.getName());
-        eventData.put("status", "PENDING");
+        eventData.put("status", ApplicationStatus.PENDING.getCode());
         webhookService.sendEvent(WebhookEventType.APPLICATION_SUBMITTED, eventData);
 
         return application.getId();
@@ -157,12 +145,15 @@ public class JobApplicationService {
         String currentStatus = application.getStatus();
         String targetStatus = request.getStatus();
 
-        // 校验状态流转合法性
-        Set<String> allowedTargets = VALID_TRANSITIONS.getOrDefault(currentStatus, Set.of());
-        if (!allowedTargets.contains(targetStatus)) {
+        // 校验状态流转合法性（委托给枚举状态机）
+        ApplicationStatus currentEnum = ApplicationStatus.fromCode(currentStatus);
+        ApplicationStatus targetEnum = ApplicationStatus.fromCode(targetStatus);
+
+        if (currentEnum == null || targetEnum == null || !currentEnum.canTransitionTo(targetEnum)) {
             throw new BusinessException(ResultCode.APPLICATION_STATUS_INVALID,
                     String.format("不允许从 [%s] 变更为 [%s]，允许的目标状态：%s",
-                            currentStatus, targetStatus, allowedTargets));
+                            currentStatus, targetStatus,
+                            currentEnum != null ? currentEnum.getAllowedTargets() : "[]"));
         }
 
         // 更新状态
@@ -416,19 +407,11 @@ public class JobApplicationService {
     }
 
     /**
-     * 状态中文描述
+     * 状态中文描述（委托给枚举）
      */
     private String getStatusDesc(String status) {
         if (status == null) return "";
-        return switch (status) {
-            case "PENDING"    -> "待处理";
-            case "SCREENING"  -> "简历筛选中";
-            case "INTERVIEW"  -> "面试中";
-            case "OFFER"      -> "已发放 Offer";
-            case "REJECTED"   -> "已淘汰";
-            case "WITHDRAWN"  -> "已撤回";
-            default -> status;
-        };
+        return ApplicationStatus.getDescriptionByCode(status);
     }
 
     /**

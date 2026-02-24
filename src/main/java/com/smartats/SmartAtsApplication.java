@@ -1,29 +1,19 @@
 package com.smartats;
 
-import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * SmartATS 应用启动类
- *
- * @SpringBootApplication 注解说明：
- * = @Configuration: 标识为配置类（相当于 xml 配置文件）
- * = @EnableAutoConfiguration: 自动配置（根据依赖自动装配 Bean）
- * = @ComponentScan: 扫描当前包及其子包下的所有组件
- * 📌 为什么叫 main 方法？
- *    Java 程序的入口点，JVM 从这里开始执行
- * 📌 为什么要单独一个启动类？
- *    1. 集中管理启动逻辑
- *    2. 作为包扫描的起点（只扫描 com.smartats 下的类）
- *    3. 分离配置和业务代码
+ * <p>
+ * @MapperScan 已移至 {@link com.smartats.config.MyBatisPlusConfig}，
+ * 避免 @WebMvcTest 切片测试加载 Mapper Bean。
  */
 @SpringBootApplication(exclude = {
         org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration.class
 })
 @EnableScheduling
-@MapperScan("com.smartats.module.*.mapper")
 public class SmartAtsApplication {
 
     public static void main(String[] args) {

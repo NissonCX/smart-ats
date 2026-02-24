@@ -42,6 +42,15 @@ public class SecurityConfig {
                         // 职位接口：GET 允许匿名浏览
                         .requestMatchers(HttpMethod.GET, "/jobs/**").permitAll()
 
+                        // Swagger / OpenAPI 文档：允许匿名访问
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/swagger-resources/**",
+                                "/webjars/**"
+                        ).permitAll()
+
                         // 其他所有接口（Webhook管理、申请管理、面试管理等）：需要认证
                         .anyRequest().authenticated()
                 )

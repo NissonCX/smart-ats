@@ -47,7 +47,7 @@ spring:
 
     # 📌 HikariCP 连接池配置（Spring Boot 默认连接池）
     hikari:
-      maximum-p-size: 20       # 最大连接数（根据数据库性能调整）
+      maximum-pool-size: 20       # 最大连接数（根据数据库性能调整）
       minimum-idle: 5             # 最小空闲连接数
       connection-timeout: 30000   # 获取连接超时时间（毫秒）
       idle-timeout: 600000       # 空闲连接超时时间（10分钟）

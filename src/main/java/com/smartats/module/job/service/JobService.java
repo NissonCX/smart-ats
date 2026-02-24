@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.constants.RedisKeyConstants;
+import com.smartats.common.enums.JobStatus;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
 import com.smartats.module.job.dto.request.*;
@@ -44,7 +45,7 @@ public class JobService {
         Job job = new Job();
         BeanUtils.copyProperties(request, job);
         job.setCreatorId(creatorId);
-        job.setStatus("DRAFT");
+        job.setStatus(JobStatus.DRAFT.getCode());
         job.setViewCount(0);
 
         // 手动设置时间（暂时代替自动填充）
@@ -272,7 +273,7 @@ public class JobService {
         if (StringUtils.hasText(request.getStatus())) {
             queryWrapper.eq(Job::getStatus, request.getStatus());
         } else {
-            queryWrapper.eq(Job::getStatus, "PUBLISHED");
+            queryWrapper.eq(Job::getStatus, JobStatus.PUBLISHED.getCode());
         }
 
         // 排序
@@ -323,11 +324,11 @@ public class JobService {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权限操作此职位");
         }
 
-        if ("PUBLISHED".equals(job.getStatus())) {
+        if (JobStatus.PUBLISHED.getCode().equals(job.getStatus())) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "职位已经是发布状态");
         }
 
-        job.setStatus("PUBLISHED");
+        job.setStatus(JobStatus.PUBLISHED.getCode());
         jobMapper.updateById(job);
 
         // 清除缓存
@@ -352,11 +353,11 @@ public class JobService {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权限操作此职位");
         }
 
-        if ("CLOSED".equals(job.getStatus())) {
+        if (JobStatus.CLOSED.getCode().equals(job.getStatus())) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "职位已经是关闭状态");
         }
 
-        job.setStatus("CLOSED");
+        job.setStatus(JobStatus.CLOSED.getCode());
         jobMapper.updateById(job);
 
         // 清除缓存
@@ -403,7 +404,7 @@ public class JobService {
 
         Page<Job> page = new Page<>(1, safeLimit);
         LambdaQueryWrapper<Job> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(Job::getStatus, "PUBLISHED").orderByDesc(Job::getViewCount);
+        queryWrapper.eq(Job::getStatus, JobStatus.PUBLISHED.getCode()).orderByDesc(Job::getViewCount);
 
         Page<Job> resultPage = jobMapper.selectPage(page, queryWrapper);
         return resultPage.getRecords().stream().map(this::convertToResponse).collect(Collectors.toList());
@@ -434,14 +435,8 @@ public class JobService {
             response.setExperienceRange(job.getExperienceMin() + "-" + job.getExperienceMax() + "年");
         }
 
-        // 状态描述
-        if ("DRAFT".equals(job.getStatus())) {
-            response.setStatusDesc("草稿");
-        } else if ("PUBLISHED".equals(job.getStatus())) {
-            response.setStatusDesc("已发布");
-        } else if ("CLOSED".equals(job.getStatus())) {
-            response.setStatusDesc("已关闭");
-        }
+        // 状态描述（委托给枚举）
+        response.setStatusDesc(JobStatus.getDescriptionByCode(job.getStatus()));
 
         return response;
     }

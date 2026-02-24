@@ -3,6 +3,7 @@ package com.smartats.module.resume.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import com.smartats.common.constants.RedisKeyConstants;
+import com.smartats.common.enums.ResumeStatus;
 import com.smartats.config.RabbitMQConfig;
 import com.smartats.module.resume.dto.ResumeParseMessage;
 import com.smartats.module.resume.dto.TaskStatusResponse;
@@ -122,7 +123,7 @@ public class ResumeParseConsumer {
             updateTaskStatus(taskId, "COMPLETED", 100);
 
             // 9. 更新简历状态
-            resume.setStatus("COMPLETED");
+            resume.setStatus(ResumeStatus.COMPLETED.getCode());
             resumeMapper.updateById(resume);
 
             log.info("简历解析完成: taskId={}, resumeId={}, candidateId={}", taskId, resumeId, candidate.getId());

@@ -1,0 +1,26 @@
+# ==================== SmartATS 测试环境配置 ====================
+# @WebMvcTest 切片测试使用，仅加载 Web 层所需最小配置
+
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  main:
+    allow-bean-definition-overriding: true
+
+server:
+  servlet:
+    context-path: /api/v1
+
+# JWT 密钥（测试用固定值）
+smartats:
+  jwt:
+    secret: TestSecretKeyForJWTMustBeLongEnoughForHS256Algorithm
+    expiration: 7200
+    refresh-expiration: 604800
+  file:
+    upload-path: ./data/test-uploads
+    max-size: 10485760
+  ai:
+    daily-quota: 100
+  verification-code:
+    expire-time: 300
