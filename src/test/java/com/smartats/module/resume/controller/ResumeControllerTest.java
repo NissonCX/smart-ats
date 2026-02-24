@@ -5,6 +5,8 @@ import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
 import com.smartats.config.SecurityConfig;
 import com.smartats.module.auth.filter.JwtAuthenticationFilter;
+import com.smartats.module.resume.dto.BatchUploadResponse;
+import com.smartats.module.resume.dto.BatchUploadResponse.BatchUploadItem;
 import com.smartats.module.resume.dto.ResumeUploadResponse;
 import com.smartats.module.resume.dto.TaskStatusResponse;
 import com.smartats.module.resume.entity.Resume;
@@ -200,6 +202,55 @@ class ResumeControllerTest {
                             .with(authentication(mockAuth(1L))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200));
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 批量上传
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Nested
+    @DisplayName("POST /resumes/batch-upload")
+    class BatchUploadTests {
+
+        @Test
+        @DisplayName("批量上传成功 - 200")
+        void shouldBatchUploadSuccessfully() throws Exception {
+            BatchUploadResponse response = new BatchUploadResponse(2, 2, 0, List.of(
+                    new BatchUploadItem("task-1", 1L, "resume1.pdf", "QUEUED", "上传成功"),
+                    new BatchUploadItem("task-2", 2L, "resume2.pdf", "QUEUED", "上传成功")
+            ));
+            given(resumeService.batchUploadResumes(any(), eq(1L))).willReturn(response);
+
+            MockMultipartFile file1 = new MockMultipartFile(
+                    "files", "resume1.pdf", "application/pdf", "pdf-content-1".getBytes());
+            MockMultipartFile file2 = new MockMultipartFile(
+                    "files", "resume2.pdf", "application/pdf", "pdf-content-2".getBytes());
+
+            mockMvc.perform(multipart("/resumes/batch-upload")
+                            .file(file1)
+                            .file(file2)
+                            .with(authentication(mockAuth(1L)))
+                            .with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(200))
+                    .andExpect(jsonPath("$.data.totalCount").value(2))
+                    .andExpect(jsonPath("$.data.successCount").value(2))
+                    .andExpect(jsonPath("$.data.failedCount").value(0))
+                    .andExpect(jsonPath("$.data.items").isArray())
+                    .andExpect(jsonPath("$.data.items[0].taskId").value("task-1"));
+        }
+
+        @Test
+        @DisplayName("未认证 - 403")
+        void shouldReturn403WhenNotAuthenticated() throws Exception {
+            MockMultipartFile file = new MockMultipartFile(
+                    "files", "resume.pdf", "application/pdf", "pdf-content".getBytes());
+
+            mockMvc.perform(multipart("/resumes/batch-upload")
+                            .file(file)
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
         }
     }
 }

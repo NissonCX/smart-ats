@@ -151,6 +151,9 @@ smartats:
     embedding:
       model: ${ZHIPU_EMBEDDING_MODEL:embedding-3}  # 智谱 embedding-3，1024 维
 
+  cors:
+    allowed-origins: "*"          # 开发环境允许所有域名，生产环境通过环境变量设置
+
   verification-code:
     expire-time: 300              # 验证码过期时间（5分钟 = 300秒）
 

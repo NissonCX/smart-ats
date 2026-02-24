@@ -25,6 +25,8 @@ public enum ResultCode {
 
     // ========== 简历模块错误 20xxx ==========
     RESUME_NOT_FOUND(20001, "简历不存在"), RESUME_ALREADY_PARSED(20002, "简历已解析，请勿重复提交"), FILE_TYPE_NOT_SUPPORTED(20003, "不支持的文件类型"), FILE_SIZE_EXCEEDED(20004, "文件大小超限"), RESUME_DUPLICATE(20005, "简历文件已存在"),
+    BATCH_UPLOAD_LIMIT_EXCEEDED(20006, "批量上传文件数超限（最多20个）"),
+    UPLOAD_RATE_LIMITED(20007, "上传过于频繁，请稍后再试"),
 
     // ========== AI 相关错误 30xxx ==========
     AI_QUOTA_EXCEEDED(30001, "AI调用次数超限"),

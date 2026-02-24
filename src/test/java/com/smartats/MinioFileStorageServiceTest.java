@@ -1,7 +1,9 @@
 package com.smartats;
 
 import com.smartats.infrastructure.storage.FileStorageService;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
@@ -12,8 +14,17 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * MinIO 集成测试
+ * <p>
+ * 需要 Docker 环境运行 MinIO 容器。
+ * CI 环境可通过设置环境变量 CI=true 自动跳过。
+ * 也可通过 Maven 排除：-Dtest='!MinioFileStorageServiceTest'
+ */
 @SpringBootTest
 @ActiveProfiles("test")
+@Tag("integration")
+@DisabledIfEnvironmentVariable(named = "CI", matches = "true", disabledReason = "MinIO 集成测试需要 Docker 环境")
 class MinioFileStorageServiceTest {
 
     @Autowired

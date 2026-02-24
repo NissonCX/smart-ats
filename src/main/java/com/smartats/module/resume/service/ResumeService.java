@@ -9,6 +9,8 @@ import com.smartats.common.exception.BusinessException;
 import com.smartats.common.result.ResultCode;
 import com.smartats.common.util.FileValidationUtil;
 import com.smartats.infrastructure.mq.MessagePublisher;
+import com.smartats.module.resume.dto.BatchUploadResponse;
+import com.smartats.module.resume.dto.BatchUploadResponse.BatchUploadItem;
 import com.smartats.module.resume.dto.ResumeParseMessage;
 import com.smartats.module.resume.dto.ResumeUploadResponse;
 import com.smartats.module.resume.dto.TaskStatusResponse;
@@ -26,6 +28,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -289,5 +293,76 @@ public class ResumeService {
         // 🔒 对文件名进行清理，防止路径穿越（如 ../../etc/passwd）
         String safeFilename = FileValidationUtil.sanitizeFilename(originalFilename);
         return String.format("resumes/%s/%s_%s", date, prefix, safeFilename);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 批量上传
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final int MAX_BATCH_SIZE = 20;
+    private static final int MAX_BATCH_UPLOADS_PER_MINUTE = 5;
+
+    /**
+     * 批量上传简历
+     * <p>
+     * 限制：最多 20 个文件，每分钟最多 5 次批量上传
+     * 每个文件独立处理，单个失败不影响其他文件
+     */
+    public BatchUploadResponse batchUploadResumes(MultipartFile[] files, Long userId) {
+        if (files == null || files.length == 0) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "文件不能为空");
+        }
+        if (files.length > MAX_BATCH_SIZE) {
+            throw new BusinessException(ResultCode.BATCH_UPLOAD_LIMIT_EXCEEDED);
+        }
+
+        // 频率限流
+        checkBatchUploadRateLimit(userId);
+
+        List<BatchUploadItem> items = new ArrayList<>();
+        int successCount = 0;
+        int failedCount = 0;
+
+        for (MultipartFile file : files) {
+            String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed";
+            try {
+                ResumeUploadResponse result = uploadResume(file, userId);
+                if (Boolean.TRUE.equals(result.getDuplicated())) {
+                    items.add(new BatchUploadItem(null, result.getResumeId(), fileName, "DUPLICATE", result.getMessage()));
+                } else {
+                    items.add(new BatchUploadItem(result.getTaskId(), result.getResumeId(), fileName, "QUEUED", result.getMessage()));
+                }
+                successCount++;
+            } catch (BusinessException e) {
+                log.warn("批量上传单文件失败: fileName={}, error={}", fileName, e.getMessage());
+                items.add(new BatchUploadItem(null, null, fileName, "FAILED", e.getMessage()));
+                failedCount++;
+            } catch (Exception e) {
+                log.error("批量上传单文件异常: fileName={}", fileName, e);
+                items.add(new BatchUploadItem(null, null, fileName, "FAILED", "处理失败"));
+                failedCount++;
+            }
+        }
+
+        log.info("批量上传完成: userId={}, total={}, success={}, failed={}",
+                userId, files.length, successCount, failedCount);
+
+        return new BatchUploadResponse(files.length, successCount, failedCount, items);
+    }
+
+    /**
+     * 批量上传频率限制：每分钟最多 5 次
+     */
+    private void checkBatchUploadRateLimit(Long userId) {
+        String rateLimitKey = RedisKeyConstants.UPLOAD_RATE_LIMIT_KEY_PREFIX + userId;
+        String countStr = stringRedisTemplate.opsForValue().get(rateLimitKey);
+        int count = countStr != null ? Integer.parseInt(countStr) : 0;
+        if (count >= MAX_BATCH_UPLOADS_PER_MINUTE) {
+            throw new BusinessException(ResultCode.UPLOAD_RATE_LIMITED);
+        }
+        stringRedisTemplate.opsForValue().increment(rateLimitKey);
+        if (count == 0) {
+            stringRedisTemplate.expire(rateLimitKey, 60, TimeUnit.SECONDS);
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.smartats.module.resume.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.smartats.common.result.Result;
+import com.smartats.module.resume.dto.BatchUploadResponse;
 import com.smartats.module.resume.dto.ResumeUploadResponse;
 import com.smartats.module.resume.dto.TaskStatusResponse;
 import com.smartats.module.resume.entity.Resume;
@@ -47,6 +48,25 @@ public class ResumeController {
 
         ResumeUploadResponse response = resumeService.uploadResume(file, userId);
 
+        return Result.success(response);
+    }
+
+    /**
+     * 批量上传简历
+     *
+     * @param files          简历文件数组（最多 20 个）
+     * @param authentication Spring Security 认证信息
+     * @return 批量上传结果，包含每个文件的处理状态
+     */
+    @Operation(summary = "批量上传简历", description = "支持最多 20 个文件，每分钟限 5 次，单个失败不影响其他")
+    @PostMapping("/batch-upload")
+    public Result<BatchUploadResponse> batchUploadResumes(
+            @RequestParam("files") MultipartFile[] files,
+            Authentication authentication
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+        log.info("收到批量简历上传请求: userId={}, fileCount={}", userId, files.length);
+        BatchUploadResponse response = resumeService.batchUploadResumes(files, userId);
         return Result.success(response);
     }
 

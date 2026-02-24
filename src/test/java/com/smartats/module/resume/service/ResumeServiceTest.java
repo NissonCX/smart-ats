@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartats.common.exception.BusinessException;
 import com.smartats.infrastructure.mq.MessagePublisher;
 import com.smartats.infrastructure.storage.FileStorageService;
+import com.smartats.module.resume.dto.BatchUploadResponse;
 import com.smartats.module.resume.dto.ResumeUploadResponse;
 import com.smartats.module.resume.dto.TaskStatusResponse;
 import com.smartats.module.resume.entity.Resume;
@@ -282,6 +283,76 @@ class ResumeServiceTest {
 
             assertThat(result.getRecords()).hasSize(1);
             assertThat(result.getTotal()).isEqualTo(1);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 批量上传测试
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Nested
+    @DisplayName("batchUploadResumes")
+    class BatchUploadTests {
+
+        @Test
+        @DisplayName("文件数组为空抛异常")
+        void shouldThrowWhenFilesEmpty() {
+            assertThatThrownBy(() -> resumeService.batchUploadResumes(null, 1L))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("超过20个文件抛异常")
+        void shouldThrowWhenExceedMaxBatchSize() {
+            MultipartFile[] files = new MultipartFile[21];
+            for (int i = 0; i < 21; i++) {
+                files[i] = mockFile;
+            }
+
+            assertThatThrownBy(() -> resumeService.batchUploadResumes(files, 1L))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("频率限制 - 超过每分钟5次抛异常")
+        void shouldThrowWhenRateLimited() {
+            given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+            given(valueOperations.get(anyString())).willReturn("5");
+
+            MultipartFile[] files = new MultipartFile[]{mockFile};
+
+            assertThatThrownBy(() -> resumeService.batchUploadResumes(files, 1L))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("单个文件失败不影响其他文件")
+        void shouldContinueWhenSingleFileFails() throws Exception {
+            given(stringRedisTemplate.opsForValue()).willReturn(valueOperations);
+            given(valueOperations.get(startsWith("rate:upload:"))).willReturn(null);
+
+            // 创建两个 mock 文件
+            MultipartFile goodFile = mock(MultipartFile.class);
+            MultipartFile badFile = mock(MultipartFile.class);
+
+            // badFile: 空文件 → 抛异常
+            given(badFile.isEmpty()).willReturn(true);
+            given(badFile.getOriginalFilename()).willReturn("bad.pdf");
+
+            // goodFile: 也设置为空以保持简单（会失败但不会 crash）
+            given(goodFile.isEmpty()).willReturn(true);
+            given(goodFile.getOriginalFilename()).willReturn("good.pdf");
+
+            MultipartFile[] files = new MultipartFile[]{badFile, goodFile};
+
+            BatchUploadResponse result = resumeService.batchUploadResumes(files, 1L);
+
+            assertThat(result.getTotalCount()).isEqualTo(2);
+            assertThat(result.getFailedCount()).isEqualTo(2);
+            assertThat(result.getItems()).hasSize(2);
+            // 两个文件都因为空文件而失败，但不会crash
+            assertThat(result.getItems().get(0).getStatus()).isEqualTo("FAILED");
+            assertThat(result.getItems().get(1).getStatus()).isEqualTo("FAILED");
         }
     }
 }

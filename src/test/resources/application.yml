@@ -24,6 +24,8 @@ smartats:
     daily-quota: 100
     embedding:
       model: embedding-3
+  cors:
+    allowed-origins: "*"
   verification-code:
     expire-time: 300
 

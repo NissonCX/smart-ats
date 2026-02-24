@@ -116,6 +116,17 @@ public class RedisKeyConstants {
      */
     public static final String RESUME_DEDUP_KEY_PREFIX = "dedup:resume:";
 
+    /**
+     * 批量上传频率限制 Key 前缀
+     * <p>
+     * 完整格式：rate:upload:{userId}
+     * <p>
+     * Value：当前分钟内批量上传次数
+     * <p>
+     * TTL：60秒
+     */
+    public static final String UPLOAD_RATE_LIMIT_KEY_PREFIX = "rate:upload:";
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 职位缓存相关
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

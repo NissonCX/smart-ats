@@ -2,6 +2,7 @@ package com.smartats.config;
 
 import com.smartats.module.auth.filter.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -24,6 +25,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${smartats.cors.allowed-origins:*}")
+    private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -74,11 +78,10 @@ public class SecurityConfig {
         return request -> {
             CorsConfiguration config = new CorsConfiguration();
 
-            // TODO: 生产环境应该配置具体的允许域名
-            // config.setAllowedOrigins(Arrays.asList("https://your-frontend-domain.com"));
-
-            // 开发环境：允许所有来源（仅用于开发）
-            config.setAllowedOriginPatterns(List.of("*"));
+            // 通过配置项 smartats.cors.allowed-origins 控制允许的域名
+            // dev 环境默认 "*"，prod 环境从环境变量读取
+            List<String> origins = Arrays.asList(allowedOrigins.split(","));
+            config.setAllowedOriginPatterns(origins);
 
             config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
             config.setAllowedHeaders(Arrays.asList("*"));
